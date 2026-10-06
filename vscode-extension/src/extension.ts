@@ -27,7 +27,6 @@ interface ScanReport {
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('praxis');
 const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
 
-let watchMode = false;
 let lastReport: ScanReport | null = null;
 
 const severityMap: Record<string, vscode.DiagnosticSeverity> = {
@@ -51,7 +50,6 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('praxis.scanWorkspace', scanWorkspace),
     vscode.commands.registerCommand('praxis.scanFile', scanCurrentFile),
     vscode.commands.registerCommand('praxis.showReport', showReport),
-    vscode.commands.registerCommand('praxis.toggleWatch', toggleWatch),
     diagnosticCollection,
     statusBarItem,
   );
@@ -60,7 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
       const config = vscode.workspace.getConfiguration('praxis');
-      if (config.get('autoScanOnSave') || watchMode) {
+      if (config.get('autoScanOnSave')) {
         scanFile(doc.uri);
       }
     })
@@ -68,7 +66,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Provide code actions (quick fixes)
   context.subscriptions.push(
-    vscode.languages.registerCodeActionProvider('*', new PraxisCodeActionProvider(), {
+    vscode.languages.registerCodeActionsProvider('*', new PraxisCodeActionProvider(), {
       providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
     })
   );
@@ -86,10 +84,17 @@ async function scanWorkspace() {
 
   try {
     const config = vscode.workspace.getConfiguration('praxis');
-    const deep = config.get('deep') ? '--deep' : '';
+    const flags: string[] = [];
+    // Dependency audit is on by default in `scan`; there is no --deps flag to
+    // pass, and appending one produced a malformed command line.
+    if (config.get<boolean>('deep')) flags.push('--deep');
+    if (config.get<boolean>('noAi')) flags.push('--no-ai');
 
+    // `scan`, not `audit`: `praxis audit` is an alias for `agents audit` and
+    // returns { findings, summary } with no grade, score, or totalFindings, so
+    // the status bar rendered "Praxis: undefined (undefined/100)".
     const { stdout } = await execAsync(
-      getCliCommand(config, 'audit', `"${workspacePath}" --json --deps ${deep}`),
+      getCliCommand(config, 'scan', `"${workspacePath}" --json ${flags.join(' ')}`.trim()),
       { timeout: 120_000, maxBuffer: 10 * 1024 * 1024, cwd: workspacePath }
     );
 
@@ -136,12 +141,11 @@ async function scanFile(uri: vscode.Uri) {
       { timeout: 30_000, maxBuffer: 5 * 1024 * 1024, cwd: workspacePath }
     );
 
-    // Parse findings for this file
-    const lines = stdout.split('\n');
-    const jsonLine = lines.find(l => l.startsWith('{'));
-    if (!jsonLine) return;
-
-    const report: ScanReport = JSON.parse(jsonLine);
+    // Parse findings for this file.
+    // `scan --json` writes pretty-printed JSON, so the payload spans many lines.
+    // Reading only the first line that starts with `{` yielded the string "{"
+    // and JSON.parse always threw, which surfaced as "Praxis scan failed".
+    const report: ScanReport = JSON.parse(stdout);
     const fileFindings = report.findings.filter(f => {
       const absPath = path.resolve(workspacePath, f.file);
       return absPath === filePath || f.file === path.relative(workspacePath, filePath);
@@ -210,11 +214,6 @@ function updateStatusBar(report: ScanReport) {
   statusBarItem.text = `${icon} ${report.grade} ${report.score}/100`;
   statusBarItem.tooltip = `Praxis: ${report.totalFindings} findings\nClick to re-scan`;
   statusBarItem.color = report.score >= 80 ? '#4ade80' : report.score >= 60 ? '#fbbf24' : '#f87171';
-}
-
-function toggleWatch() {
-  watchMode = !watchMode;
-  vscode.window.showInformationMessage(`Praxis watch mode: ${watchMode ? 'ON' : 'OFF'}`);
 }
 
 function showReport() {

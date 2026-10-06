@@ -10,8 +10,17 @@ editor diagnostics.
 - **Scan Workspace** (`Praxis: Scan Workspace`) — full 28-agent audit
 - **Scan Current File** (`Praxis: Scan Current File`) — quick file check
 - **Show Report** (`Praxis: Show Report`) — open the scan report
-- **Toggle Watch Mode** (`Praxis: Toggle Watch Mode`) — continuous monitoring
 - **Auto-scan on save** — diagnostics appear inline as you type (configurable)
+
+## Status
+
+**Not published to the Visual Studio Marketplace yet.** The source here builds and
+is reviewed, but there is no released `.vsix`. Install the CLI and use it directly
+in the meantime:
+
+```bash
+npm install -g praxis-sec
+```
 
 ## Requirements
 

@@ -41,10 +41,6 @@
       {
         "command": "praxis.showReport",
         "title": "Praxis: Show Report"
-      },
-      {
-        "command": "praxis.toggleWatch",
-        "title": "Praxis: Toggle Watch Mode"
       }
     ],
     "configuration": {

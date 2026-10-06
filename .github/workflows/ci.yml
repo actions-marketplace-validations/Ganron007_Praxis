@@ -90,6 +90,15 @@ jobs:
       - name: Verify npm pack
         run: npm pack --dry-run
 
+      # The extension shipped with a call to `registerCodeActionProvider` (the API
+      # is `registerCodeActionsProvider`), so it had never compiled. Nothing caught
+      # it because nothing built it. Keep it honest.
+      - name: Typecheck VS Code extension
+        working-directory: vscode-extension
+        run: |
+          npm install --no-audit --no-fund --loglevel=error
+          npx tsc -p ./ --noEmit
+
       - name: Smoke-test Marketplace action and composite outputs
         id: marketplace
         uses: ./

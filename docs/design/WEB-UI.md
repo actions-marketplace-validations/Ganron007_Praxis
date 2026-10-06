@@ -1,7 +1,6 @@
 # Praxis Web UI — design & threat model
 
-> **Status:** design agreed; v1 implemented read-only (scan orchestration).
-> Feature tracking: `P-IMP-052` in `docs/internal/IMPROVEMENT-PLAN.md`.
+> **Status:** implemented — read-only scan orchestration, served locally by the CLI.
 >
 > This document exists because a web UI for Praxis is the one place where adding a
 > feature means adding an **attack surface** to a security tool. A CLI runs with the
@@ -21,9 +20,9 @@ A local web app for driving scans and managing scan projects:
 - manage baselines
 
 Reuses the existing `Orchestrator` as the scan engine — the UI never reimplements
-detection. All UI is **vanilla JS served from the CLI**, honouring `AGENTS.md`'s
-no-build-step rule: no bundler, no framework, no network fetch of assets. Reports use
-the shared `cli/core/output/html-theme.js`.
+detection. All UI is **vanilla JS served from the CLI**, with no bundler, no
+framework, and no network fetch of assets. Reports use the shared
+`cli/core/output/html-theme.js`.
 
 ## 2. Threat model — the part that matters
 
