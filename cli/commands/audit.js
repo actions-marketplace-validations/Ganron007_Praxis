@@ -245,9 +245,21 @@ export async function auditCommand(targetPath = '.', options = {}) {
     if (options.baseUrl) orchestratorOpts.baseUrl = options.baseUrl;
     if (options.budget) orchestratorOpts.budget = options.budget;
     if (options.verbose) orchestratorOpts.verbose = true;
-    if (cacheDiff && cacheDiff.changedFiles.length < allFiles.length) {
-      orchestratorOpts.changedFiles = cacheDiff.changedFiles;
-    }
+    // Deliberately NOT passing `changedFiles` to the orchestrator.
+    //
+    // BaseAgent.getFilesToScan() returns `context.changedFiles || context.files`,
+    // so passing it makes an agent scan only changed files — and on an unchanged
+    // tree that list is empty, so the agent reports nothing at all. The cache
+    // cannot cover for that: the restore below is filtered to
+    // `category === 'secrets'`, so agent findings for unchanged files were never
+    // coming back. A warm scan silently lost every finding from
+    // PromptInjectionProberAgent, VibeCodingAgent and ExceptionHandlerAgent —
+    // 9 findings on this tree, under-reporting on the second run of any project.
+    //
+    // 25 of 28 agents already ignore `changedFiles` and read `context.files`, so
+    // the hint only ever narrowed three of them while making them wrong. Phase 1
+    // (secrets) is where the cache actually pays for itself, and it still uses
+    // it. Passing an unsafe optimisation is worse than not optimising.
     const results = await orchestrator.runAll(absolutePath, orchestratorOpts); // praxis-ignore — orchestrator result, not LLM output triggering actions
     recon = results.recon;
     agentFindings = results.findings;
