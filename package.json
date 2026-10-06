@@ -1,6 +1,6 @@
 {
   "name": "praxis-sec",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Praxis — From finding to fix, on autopilot. AI-native security CLI with 28 parallel agents covering AI / MCP / skill threats, OWASP LLM Top 10, multi-source supply-chain intel (OSV / GHSA / KEV / EPSS / NVD / Gitleaks + optional paid feeds), secret scanning, and an LLM-powered agentic remediation loop.",
   "main": "cli/index.js",
   "bin": {
@@ -8,10 +8,11 @@
   },
   "type": "module",
   "scripts": {
-    "test": "node --test cli/__tests__/intel.test.js cli/__tests__/agents.test.js cli/__tests__/core.test.js cli/__tests__/standards.test.js cli/__tests__/model-file-scanner.test.js cli/__tests__/prompt-injection-prober.test.js cli/__tests__/ast-engine.test.js cli/__tests__/benchmark.test.js cli/__tests__/redteam.test.js cli/__tests__/html-reporter.test.js cli/__tests__/scan-fingerprint.test.js cli/__tests__/fix-ledger.test.js cli/__tests__/threatpack-probes.test.js cli/__tests__/score-history.test.js cli/__tests__/web-ui.test.js cli/__tests__/rule-portability.test.js cli/__tests__/git-remote.test.js",
+    "test": "node --test cli/__tests__/intel.test.js cli/__tests__/agents.test.js cli/__tests__/core.test.js cli/__tests__/standards.test.js cli/__tests__/model-file-scanner.test.js cli/__tests__/prompt-injection-prober.test.js cli/__tests__/ast-engine.test.js cli/__tests__/benchmark.test.js cli/__tests__/redteam.test.js cli/__tests__/html-reporter.test.js cli/__tests__/scan-fingerprint.test.js cli/__tests__/fix-ledger.test.js cli/__tests__/threatpack-probes.test.js cli/__tests__/score-history.test.js cli/__tests__/web-ui.test.js cli/__tests__/rule-portability.test.js cli/__tests__/git-remote.test.js cli/__tests__/release-reliability.test.js",
     "test:determinism": "node scripts/check-determinism.mjs .",
     "lint": "eslint cli/",
-    "praxis": "node cli/bin/praxis.js"
+    "praxis": "node cli/bin/praxis.js",
+    "prepublishOnly": "npm test && npm run lint && npm run test:determinism"
   },
   "keywords": [
     "security",
@@ -63,9 +64,17 @@
     "commander": "^12.1.0",
     "fast-glob": "^3.3.3",
     "ora": "^8.0.1",
-    "write-file-atomic": "^7.0.0"
+    "write-file-atomic": "^5.0.1"
   },
   "devDependencies": {
     "eslint": "^9.18.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ganron007/Praxis.git"
+  },
+  "homepage": "https://github.com/Ganron007/Praxis#readme",
+  "bugs": {
+    "url": "https://github.com/Ganron007/Praxis/issues"
   }
 }

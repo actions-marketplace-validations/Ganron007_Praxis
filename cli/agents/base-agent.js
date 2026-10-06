@@ -17,7 +17,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 import { SKIP_DIRS, SKIP_EXTENSIONS, SKIP_FILENAMES, MAX_FILE_SIZE, MAX_SCAN_FILES, loadGitignorePatterns } from '../utils/patterns.js';
 
 // =============================================================================

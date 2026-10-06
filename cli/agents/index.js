@@ -123,11 +123,11 @@ export function buildOrchestrator() {
 }
 
 /**
- * Async build — loads built-in agents + any plugins from .praxis/agents/.
+ * Async build — loads built-ins and, with explicit trust, .praxis/agents/ plugins.
  * Preferred over buildOrchestrator() when rootPath is available.
  *
  * @param {string} rootPath — project root (for plugin discovery)
- * @param {object} options  — { verbose, quiet }
+ * @param {object} options  — { verbose, quiet, trustPlugins }
  */
 export async function buildOrchestratorAsync(rootPath, options = {}) {
   const orchestrator = new OrchestratorClass();

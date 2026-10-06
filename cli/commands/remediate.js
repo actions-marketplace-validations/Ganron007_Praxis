@@ -38,7 +38,7 @@ import { execSync, execFileSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import writeFileAtomic from 'write-file-atomic';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 import {
   SECRET_PATTERNS,
   SKIP_DIRS,

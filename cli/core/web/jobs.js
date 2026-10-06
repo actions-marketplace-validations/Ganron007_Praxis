@@ -36,7 +36,7 @@ export class JobQueue extends EventEmitter {
    * @returns {{ok:true, job:object} | {ok:false, error:string}}
    */
   enqueue(project) {
-    const queued = this.jobs.length + this.pending.length;
+    const queued = this.running + this.pending.length;
     if (queued >= this.maxQueue) {
       return { ok: false, error: `queue is full (max ${this.maxQueue} scans)` };
     }

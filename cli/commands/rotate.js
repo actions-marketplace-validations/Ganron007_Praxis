@@ -26,7 +26,7 @@ import readline from 'readline';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 import {
   SECRET_PATTERNS,
   SKIP_DIRS,

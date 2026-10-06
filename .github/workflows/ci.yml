@@ -77,3 +77,22 @@ jobs:
 
       - name: Verify npm pack
         run: npm pack --dry-run
+
+      - name: Smoke-test Marketplace action and composite outputs
+        id: marketplace
+        uses: ./
+        with:
+          threshold: '0'
+          deps: 'false'
+          sarif: 'false'
+          comment: 'false'
+
+      - name: Verify Marketplace outputs
+        env:
+          PRAXIS_SCORE: ${{ steps.marketplace.outputs.score }}
+          PRAXIS_GRADE: ${{ steps.marketplace.outputs.grade }}
+          PRAXIS_FINDINGS: ${{ steps.marketplace.outputs.findings }}
+        run: |
+          test -n "$PRAXIS_SCORE"
+          test -n "$PRAXIS_GRADE"
+          test -n "$PRAXIS_FINDINGS"

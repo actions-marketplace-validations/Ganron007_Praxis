@@ -37,7 +37,7 @@ import {
 import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
 import { ThreatIntel } from '../utils/threat-intel.js';
 import * as intelOrchestrator from '../utils/intel/index.js';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 
 // =============================================================================
 // MAIN COMMAND
@@ -49,6 +49,12 @@ export async function ciCommand(targetPath = '.', options = {}) {
   const failOn = options.failOn || null;
   const alwaysFailOn = options.alwaysFailOn || null;
   const sarifPath = options.sarif || null;
+
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100 ||
+      [failOn, alwaysFailOn].some(value => value && !['critical', 'high', 'medium', 'low'].includes(value))) {
+    console.error('[praxis] Invalid CI gate: threshold must be 0-100 and severity must be critical, high, medium, or low.');
+    process.exit(2);
+  }
 
   if (!fs.existsSync(absolutePath)) {
     console.error(`[praxis] Path does not exist: ${absolutePath}`);
@@ -99,16 +105,26 @@ export async function ciCommand(targetPath = '.', options = {}) {
 
   // ── Agent Scan ───────────────────────────────────────────────────────────
   const orchestrator = buildOrchestrator();
-  const results = await orchestrator.runAll(absolutePath, { quiet: true }); // praxis-ignore — orchestrator result, not LLM output triggering actions
+  const results = await orchestrator.runAll(absolutePath, { quiet: true, deep: options.deep }); // praxis-ignore — orchestrator result, not LLM output triggering actions
   const agentFindings = results.findings;
+  let scanComplete = results.agentResults.every(agent => agent.success);
+  if (!scanComplete) console.error('[praxis] Scan incomplete: one or more agents failed.');
 
   // ── Dependency Audit ─────────────────────────────────────────────────────
   let depVulns = [];
+  let dependencyAudit = options.deps === false ? 'skipped' : 'not-applicable';
   if (options.deps !== false) {
     try {
       const depResult = await runDepsAudit(absolutePath);
       depVulns = depResult.vulns || [];
-    } catch { /* skip */ }
+      dependencyAudit = depResult.error ? 'failed' : (depResult.pm ? 'complete' : 'not-applicable');
+    } catch {
+      dependencyAudit = 'failed';
+    }
+    if (dependencyAudit === 'failed') {
+      scanComplete = false;
+      console.error('[praxis] Dependency audit incomplete. Install the package manager audit tool and check registry access, or explicitly use --no-deps.');
+    }
   }
 
   // ── Merge & Deduplicate ──────────────────────────────────────────────────
@@ -140,6 +156,8 @@ export async function ciCommand(targetPath = '.', options = {}) {
   scoringEngine.saveToHistory(absolutePath, scoreResult);
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  const gateFindings = [...allFindings, ...depVulns];
+  const floorFindings = [...preBaselineFindings, ...depVulns];
 
   // ── SARIF Output ─────────────────────────────────────────────────────────
   if (sarifPath) {
@@ -168,7 +186,10 @@ export async function ciCommand(targetPath = '.', options = {}) {
         })),
       } : {}),
       threshold,
-      pass: determinePass(scoreResult, allFindings, threshold, failOn, alwaysFailOn, preBaselineFindings),
+      scanComplete,
+      dependencyAudit,
+      floorPass: determinePass(scoreResult, [], 0, null, alwaysFailOn, floorFindings),
+      pass: scanComplete && determinePass(scoreResult, gateFindings, threshold, failOn, alwaysFailOn, floorFindings),
       duration: `${duration}s`,
     }, null, 2));
   } else {
@@ -200,12 +221,12 @@ export async function ciCommand(targetPath = '.', options = {}) {
     try {
       postPRComment(scoreResult, allFindings, depVulns, absolutePath, duration);
     } catch (err) {
-      console.log(`[praxis] Warning: Could not post PR comment: ${err.message}`);
+      console.error(`[praxis] Warning: Could not post PR comment: ${err.message}`);
     }
   }
 
   // ── Exit Code ────────────────────────────────────────────────────────────
-  const pass = determinePass(scoreResult, allFindings, threshold, failOn, alwaysFailOn, preBaselineFindings);
+  const pass = scanComplete && determinePass(scoreResult, gateFindings, threshold, failOn, alwaysFailOn, floorFindings);
   if (!pass) {
     if (!options.json) {
       if (failOn) {
@@ -229,14 +250,7 @@ export async function ciCommand(targetPath = '.', options = {}) {
 // HELPERS
 // =============================================================================
 
-function determinePass(scoreResult, findings, threshold, failOn, alwaysFailOn, preBaselineFindings = null) {
-  if (failOn) {
-    const sevOrder = ['critical', 'high', 'medium', 'low'];
-    const failIndex = sevOrder.indexOf(failOn);
-    if (failIndex === -1) return scoreResult.score >= threshold;
-    const blockingSevs = sevOrder.slice(0, failIndex + 1);
-    return !findings.some(f => blockingSevs.includes(f.severity));
-  }
+export function determinePass(scoreResult, findings, threshold, failOn, alwaysFailOn, preBaselineFindings = null) {
   if (alwaysFailOn) {
     const sevOrder = ['critical', 'high', 'medium', 'low'];
     const floorIndex = sevOrder.indexOf(alwaysFailOn);
@@ -245,6 +259,13 @@ function determinePass(scoreResult, findings, threshold, failOn, alwaysFailOn, p
     // Floor beats everything: even an accepted baseline cannot suppress it.
     const floorSet = preBaselineFindings || findings;
     if (floorSet.some(f => floorSevs.includes(f.severity))) return false;
+  }
+  if (failOn) {
+    const sevOrder = ['critical', 'high', 'medium', 'low'];
+    const failIndex = sevOrder.indexOf(failOn);
+    if (failIndex === -1) return scoreResult.score >= threshold;
+    const blockingSevs = sevOrder.slice(0, failIndex + 1);
+    return !findings.some(f => blockingSevs.includes(f.severity));
   }
   return scoreResult.score >= threshold;
 }
@@ -256,9 +277,12 @@ function emitGitHubAnnotations(findings, rootPath) {
     const rel = path.relative(rootPath, f.file).replace(/\\/g, '/');
     const level = ['critical', 'high'].includes(f.severity) ? 'error' : 'warning';
     const col = f.column || 1;
-    const title = (f.title || f.rule || 'Security Finding').replace(/\r?\n/g, ' ');
-    const msg = (f.description || f.matched || '').replace(/\r?\n/g, ' ').slice(0, 300);
-    console.log(`::${level} file=${rel},line=${f.line},col=${col},title=${title}::${msg}`);
+    const escapeData = value => String(value).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+    const escapeProperty = value => escapeData(value).replace(/:/g, '%3A').replace(/,/g, '%2C');
+    const title = escapeProperty(f.title || f.rule || 'Security Finding');
+    // Matched text may be a live credential. Annotations only need the description.
+    const msg = escapeData(String(f.description || 'Security finding detected').slice(0, 300));
+    console.error(`::${level} file=${escapeProperty(rel)},line=${f.line},col=${col},title=${title}::${msg}`);
   }
 }
 
@@ -301,7 +325,7 @@ function postPRComment(scoreResult, findings, depVulns, rootPath, duration) {
       const parsed = JSON.parse(prJson);
       prNumber = String(parsed.number);
     } catch {
-      console.log('[praxis] No PR detected — skipping PR comment');
+      console.error('[praxis] No PR detected — skipping PR comment');
       return;
     }
   }
@@ -344,7 +368,7 @@ function postPRComment(scoreResult, findings, depVulns, rootPath, duration) {
     stdio: ['pipe', 'pipe', 'pipe'], // praxis-ignore
   });
 
-  console.log(`[praxis] PR comment posted on #${prNumber}`);
+  console.error(`[praxis] PR comment posted on #${prNumber}`);
 }
 
 function checkIntelFreshness(maxAge) {

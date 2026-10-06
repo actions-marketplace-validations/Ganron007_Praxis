@@ -63,12 +63,17 @@ export class Orchestrator {
    * Run a single agent with a timeout.
    */
   async runAgent(agent, context, timeout) {
-    return Promise.race([
-      agent.analyze(context),
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`timed out after ${timeout / 1000}s`)), timeout);
-      }),
-    ]);
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(() => agent.analyze(context)),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`timed out after ${timeout / 1000}s`)), timeout);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**

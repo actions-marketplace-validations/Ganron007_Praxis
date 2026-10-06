@@ -60,3 +60,30 @@ export function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+/** Resolve a write target inside a project, including existing symlink parents. */
+export function resolveProjectFile(root, candidate) {
+  if (typeof candidate !== 'string' || !candidate || candidate.includes('\0')) {
+    throw new Error('file path must be a non-empty string');
+  }
+  const project = fs.realpathSync(root);
+  const inside = target => {
+    const relative = path.relative(project, target);
+    return relative && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  };
+  const absolute = path.resolve(project, candidate);
+  if (!inside(absolute)) throw new Error(`path escapes project: ${candidate}`);
+  let existing = absolute;
+  while (!fs.existsSync(existing)) {
+    // A dangling symlink is an existing directory entry and must not be followed.
+    try {
+      if (fs.lstatSync(existing).isSymbolicLink()) throw new Error(`dangling symlink: ${candidate}`);
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    existing = path.dirname(existing);
+  }
+  const resolved = path.join(fs.realpathSync(existing), path.relative(existing, absolute));
+  if (!inside(resolved)) throw new Error(`symlink escapes project: ${candidate}`);
+  return resolved;
+}

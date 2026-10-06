@@ -28,7 +28,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import {

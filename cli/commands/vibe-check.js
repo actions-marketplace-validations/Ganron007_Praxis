@@ -30,7 +30,7 @@ import {
   loadGitignorePatterns
 } from '../utils/patterns.js';
 import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 
 // =============================================================================
 // VIBES DATA

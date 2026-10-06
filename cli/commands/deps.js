@@ -229,7 +229,10 @@ function parseNpmAudit(jsonStr) {
   try {
     data = JSON.parse(jsonStr);
   } catch {
-    return [];
+    throw new Error('Dependency audit did not produce valid JSON');
+  }
+  if (!data || data.error || (!data.vulnerabilities && !data.advisories)) {
+    throw new Error('Dependency audit did not produce an audit report');
   }
 
   const vulns = [];
@@ -331,11 +334,14 @@ function parsePipAudit(jsonStr) {
   try {
     data = JSON.parse(jsonStr);
   } catch {
-    return [];
+    throw new Error('Dependency audit did not produce valid JSON');
   }
 
+  const dependencies = Array.isArray(data) ? data : data?.dependencies;
+  if (!Array.isArray(dependencies)) throw new Error('Dependency audit did not produce an audit report');
+
   const vulns = [];
-  for (const pkg of (Array.isArray(data) ? data : [])) {
+  for (const pkg of dependencies) {
     for (const vuln of (pkg.vulns || [])) {
       const fixVersion = vuln.fix_versions?.[0];
       vulns.push({
@@ -500,7 +506,7 @@ function printDepFindings(vulns, pm) {
 
 /**
  * Run the dependency audit for a given path and return normalized vulnerabilities.
- * Returns { pm, vulns } or { pm: null, vulns: [] } if no manifest found.
+ * Returns { pm, vulns, error? }. An unavailable audit is never a clean audit.
  * Does not print anything — used programmatically by other commands.
  */
 export async function runDepsAudit(rootPath) {
@@ -511,6 +517,6 @@ export async function runDepsAudit(rootPath) {
     const vulns = runAudit(pm, rootPath);
     return { pm, vulns };
   } catch {
-    return { pm, vulns: [] };
+    return { pm, vulns: [], error: `${pm.name} dependency audit could not be completed` };
   }
 }

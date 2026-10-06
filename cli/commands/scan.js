@@ -22,7 +22,7 @@
 import fs from 'fs';
 import path from 'path';
 import { renderFindingsSARIF } from '../core/output/sarif.js';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 import ora from 'ora';
 import chalk from 'chalk';
 import {

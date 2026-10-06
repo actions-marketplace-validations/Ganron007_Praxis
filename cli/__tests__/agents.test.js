@@ -2477,6 +2477,105 @@ describe('rule-table suppression', async () => {
 });
 
 // =============================================================================
+// CRITICAL-SEVERITY FALSE POSITIVES
+// =============================================================================
+//
+// Both of these fired a critical/high on ordinary, correct code. A rule that
+// cries wolf on the words `created` or a `bugs` URL erodes trust in every other
+// finding, so each is pinned in both directions.
+
+describe('SQL template-literal rule precision', async () => {
+  const { InjectionTester } = await import('../agents/injection-tester.js');
+  const agent = new InjectionTester();
+
+  // The keyword alternation had no word boundary, so CREATE matched inside
+  // "created" and INSERT inside "inserted". These are all correct code.
+  const NOT_SQL = [
+    ['created', 'if (a !== b) throw new Error(`created file changed since fix: ${p}`);'],
+    ['updated', 'const m = `updated record ${id} at ${ts}`;'],
+    ['deleted', 'log(`deleted item ${id}`);'],
+    ['inserted', 'emit(`inserted row ${i}`);'],
+    ['replaced', 'write(`replacement text ${v}`);'],
+    ['merge', 'const s = `merge conflict ${a}`;'],
+    ['select', 'label(`Select an option ${n}`);'],
+    ['truncate', 'ui(`truncate the text to ${n} chars`);'],
+  ];
+
+  for (const [name, src] of NOT_SQL) {
+    it(`does not flag a template literal starting with "${name}"`, async () => {
+      const { dir, file } = writeTempFile(src);
+      try {
+        const findings = await agent.analyze({ rootPath: dir, files: [file], recon: {}, options: {} });
+        assert.ok(!findings.some(f => f.rule === 'SQL_INJECTION_TEMPLATE_LITERAL'),
+          `"${name}" is not SQL and must not be reported`);
+      } finally { cleanup(dir); }
+    });
+  }
+
+  const IS_SQL = [
+    'const q = `SELECT * FROM users WHERE id=${id}`;',
+    'db.query(`INSERT INTO t (a) VALUES (${v})`);',
+    '`UPDATE accounts SET x=${y} WHERE id=${z}`',
+    '`DELETE FROM sessions WHERE token=${t}`',
+    '`CREATE TABLE t (id INT, v=${v})`',
+    '`MERGE INTO t USING s ON t.id=${s.id}`',
+    '`DROP TABLE IF EXISTS ${tbl}`',
+    '`TRUNCATE ${t}`',
+  ];
+
+  for (const src of IS_SQL) {
+    it(`still flags real SQL: ${src.slice(0, 34)}`, async () => {
+      const { dir, file } = writeTempFile(src);
+      try {
+        const findings = await agent.analyze({ rootPath: dir, files: [file], recon: {}, options: {} });
+        assert.ok(findings.some(f => f.rule === 'SQL_INJECTION_TEMPLATE_LITERAL'),
+          `real SQL injection must still be reported: ${src}`);
+      } finally { cleanup(dir); }
+    });
+  }
+});
+
+describe('ASI-10 integrity-hash rule scoping', async () => {
+  const { AgentAttestationAgent } = await import('../agents/agent-attestation-agent.js');
+  const agent = new AgentAttestationAgent();
+
+  it('does not flag npm metadata URLs in package.json', async () => {
+    // Every `"url"` in a package manifest is bugs/repository/homepage/funding —
+    // a human-facing link, never fetched at runtime, and npm has no `integrity`
+    // field that would pin one. This fired on essentially every real package.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'praxis-asi10-'));
+    const file = path.join(dir, 'package.json');
+    fs.writeFileSync(file, JSON.stringify({
+      name: 'some-package',
+      version: '1.0.0',
+      repository: { type: 'git', url: 'git+https://github.com/o/r.git' },
+      bugs: { url: 'https://github.com/o/r/issues' },
+      homepage: 'https://o.dev/docs',
+    }, null, 2));
+    try {
+      const findings = await agent.analyze({ rootPath: dir, files: [file], recon: {}, options: {} });
+      assert.ok(!findings.some(f => f.rule === 'AGENT_NO_INTEGRITY_HASH'),
+        `npm metadata URLs are not runtime resources (got ${findings.map(f => f.rule).join(', ')})`);
+    } finally { cleanup(dir); }
+  });
+
+  it('still flags an unpinned remote resource in an agent manifest', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'praxis-asi10b-'));
+    const file = path.join(dir, 'agent-manifest.json');
+    fs.writeFileSync(file, JSON.stringify({
+      name: 'my-agent',
+      version: '1.0.0',
+      promptSource: { url: 'https://cdn.example.com/system-prompt.txt' },
+    }, null, 2));
+    try {
+      const findings = await agent.analyze({ rootPath: dir, files: [file], recon: {}, options: {} });
+      assert.ok(findings.some(f => f.rule === 'AGENT_NO_INTEGRITY_HASH'),
+        'an agent manifest loading a remote prompt with no integrity hash must still be reported');
+    } finally { cleanup(dir); }
+  });
+});
+
+// =============================================================================
 // GOVERNANCE ABSENCE-AUDITS (P-IMP-036)
 // =============================================================================
 

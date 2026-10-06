@@ -124,6 +124,7 @@ const scan = program
 scan
   .command('full [path]', { isDefault: true })
   .description('Full audit: secrets + 28 agents + deps + score + remediation plan')
+  .option('--trust-plugins', 'Execute trusted local .praxis/agents plugins with your permissions')
   .option('--json', 'Output results as JSON')
   .option('--sarif', 'Output results in SARIF format')
   .option('--csv', 'Output results as CSV')
@@ -262,6 +263,7 @@ scan
   .option('--fail-on <severity>', 'Fail on findings at this severity or above')
   .option('--always-fail-on <severity>', 'Severity floor that even an accepted baseline cannot suppress')
   .option('--include-findings', 'Include the finding list (file/rule/severity) in JSON output for diffing')
+  .option('--deep', 'Enable LLM deep analysis (requires an API key)')
   .option('--sarif <file>', 'Write SARIF output for GitHub Code Scanning')
   .option('--json', 'JSON output')
   .option('--no-deps', 'Skip dependency audit')
@@ -686,6 +688,7 @@ legacy('ci [path]', 'CI/CD mode: scan, score, exit 1 on failure (alias of `scan 
   ['--fail-on <severity>', 'Fail on findings at this severity or above'],
   ['--always-fail-on <severity>', 'Severity floor that even an accepted baseline cannot suppress'],
   ['--include-findings', 'Include the finding list (file/rule/severity) in JSON output for diffing'],
+  ['--deep', 'Enable LLM deep analysis (requires an API key)'],
   ['--sarif <file>', 'Write SARIF output for GitHub Code Scanning'],
   ['--json', 'JSON output'],
   ['--no-deps', 'Skip dependency audit'],
@@ -696,6 +699,7 @@ legacy('ci [path]', 'CI/CD mode: scan, score, exit 1 on failure (alias of `scan 
 ]).action(ciCommand);
 
 legacy('audit [path]', 'Audit agent configs (CLAUDE.md, .cursorrules, MCP, skills) — alias of `agents audit`', [
+  ['--trust-plugins', 'Execute trusted local .praxis/agents plugins with your permissions'],
   ['--fix', 'Auto-harden agent configurations'],
   ['--preflight', 'Exit non-zero on critical findings (for CI)'],
   ['--red-team', 'Simulate adversarial attacks against agent configs'],

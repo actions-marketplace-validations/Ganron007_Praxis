@@ -18,9 +18,11 @@
 
 import http from 'http';
 import { URL } from 'url';
+import { isIP } from 'net';
 import { listProjects, addProject, getProject, removeProject } from './projects.js';
 import { JobQueue, runScanWithOrchestrator } from './jobs.js';
 import { renderFrontend, AGENT_ROSTER } from './ui.js';
+import jsonReport from '../output/json.js';
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']); // praxis-ignore SSRF_INTERNAL_IP — loopback allow-list: binding only to loopback IS the mitigation
 const CLIENT_HEADER = 'x-praxis-client';
@@ -28,7 +30,8 @@ const CLIENT_VALUE = 'praxis-web';
 const MAX_BODY_BYTES = 64 * 1024;
 
 export function isLoopback(host) {
-  return LOOPBACK.has(host) || String(host).startsWith('127.');
+  const normalized = String(host).replace(/^\[|\]$/g, '');
+  return LOOPBACK.has(normalized) || (isIP(normalized) === 4 && normalized.startsWith('127.'));
 }
 
 /** Decides the effective bind, refusing an unsafe remote bind (threat T4). */
@@ -136,14 +139,14 @@ function guardMutation(req) {
   }
   const origin = req.headers.origin;
   if (origin) {
-    let host;
+    let originURL;
     try {
-      host = new URL(origin).hostname;
+      originURL = new URL(origin);
     } catch {
       return { ok: false, error: 'malformed Origin' };
     }
-    // Same-origin or loopback origin only: blocks DNS rebinding.
-    if (!isLoopback(host) && host !== 'localhost') {
+    // A different loopback port is still a different browser origin.
+    if (!['http:', 'https:'].includes(originURL.protocol) || originURL.host !== req.headers.host) {
       return { ok: false, error: 'cross-origin request refused' };
     }
   }
@@ -211,6 +214,13 @@ export function createServer({ host: _host = '127.0.0.1', port: _port = 7317, to
     const route = url.pathname.replace(/\/+$/, '') || '/';
     const method = req.method || 'GET';
 
+    // DNS rebinding can read reports through GET as well as mutate through POST.
+    // Without token auth, every request must address the actual local server.
+    if (!token && ((!isLoopback(url.hostname) && url.hostname !== 'localhost') ||
+        Number(url.port || 80) !== server.address()?.port)) {
+      return sendJSON(res, 403, { error: 'untrusted Host header' });
+    }
+
     // Auth for remote binds.
     if (token) {
       const auth = req.headers.authorization || '';
@@ -266,7 +276,7 @@ export function createServer({ host: _host = '127.0.0.1', port: _port = 7317, to
           if (!job) return sendJSON(res, 404, { error: 'no completed scan for this project' });
           const full = jobs.get(job.id);
           if (!full?.result) return sendJSON(res, 404, { error: 'scan has no result' });
-          return sendJSON(res, 200, { job: jobs._public(full), result: full.result });
+          return sendJSON(res, 200, { job: jobs._public(full), result: JSON.parse(jsonReport(full.result)) });
         }
       }
 
@@ -279,7 +289,7 @@ export function createServer({ host: _host = '127.0.0.1', port: _port = 7317, to
         const full = jobs.get(jobReportMatch[1]);
         if (!full) return sendJSON(res, 404, { error: 'unknown job' });
         if (!full.result) return sendJSON(res, 404, { error: 'scan has no result' });
-        return sendJSON(res, 200, { job: jobs._public(full), result: full.result });
+        return sendJSON(res, 200, { job: jobs._public(full), result: JSON.parse(jsonReport(full.result)) });
       }
 
       const jobMatch = route.match(/^\/api\/jobs\/([\w-]+)$/);
@@ -313,6 +323,7 @@ export function createServer({ host: _host = '127.0.0.1', port: _port = 7317, to
         });
         const send = j => res.write(`data: ${JSON.stringify(j)}\n\n`);
         send(jobs._public(job));
+        if (['done', 'failed', 'cancelled'].includes(job.status)) return res.end();
         const onUpdate = j => {
           if (j.id !== job.id) return;
           send(j);

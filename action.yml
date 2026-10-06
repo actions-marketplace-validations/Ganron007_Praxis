@@ -62,20 +62,28 @@ inputs:
 outputs:
   score:
     description: 'Security score (0-100)'
+    value: ${{ steps.scan.outputs.score }}
   grade:
     description: 'Letter grade (A-F)'
+    value: ${{ steps.scan.outputs.grade }}
   findings:
     description: 'Total number of findings'
+    value: ${{ steps.scan.outputs.findings }}
   secrets:
     description: 'Number of secrets detected'
+    value: ${{ steps.scan.outputs.secrets }}
   vulns:
     description: 'Number of code vulnerabilities'
+    value: ${{ steps.scan.outputs.vulns }}
   cves:
     description: 'Number of dependency CVEs'
+    value: ${{ steps.scan.outputs.cves }}
   sarif-file:
     description: 'Path to SARIF file (if generated)'
+    value: ${{ steps.scan.outputs.sarif-file }}
   report-url:
-    description: 'URL to the scan report (if available)'
+    description: 'Workflow run containing the scan summary'
+    value: ${{ steps.scan.outputs.report-url }}
 
 runs:
   using: 'composite'
@@ -87,221 +95,42 @@ runs:
 
     - name: Install Praxis
       shell: bash
-      run: npm install -g praxis-sec@latest
+      env:
+        PRAXIS_ACTION_PATH: ${{ github.action_path }}
+      # Run the code selected by the Action ref, with dependencies from its lockfile.
+      run: npm ci --prefix "$PRAXIS_ACTION_PATH" --omit=dev --ignore-scripts --no-audit --no-fund
 
     - name: Run security scan
       id: scan
       shell: bash
       env:
-        ANTHROPIC_API_KEY: ${{ env.ANTHROPIC_API_KEY }}
-        OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
-        GOOGLE_AI_API_KEY: ${{ env.GOOGLE_AI_API_KEY }}
-      run: |
-        # Build flags (single scan run produces both JSON and SARIF)
-        FLAGS="--json"
-        if [ "${{ inputs.deep }}" = "true" ]; then FLAGS="$FLAGS --deep"; fi
-        if [ "${{ inputs.deps }}" = "false" ]; then FLAGS="$FLAGS --no-deps"; fi
-        if [ "${{ inputs.baseline }}" = "true" ]; then FLAGS="$FLAGS --baseline"; fi
-        if [ -n "${{ inputs.fail-on }}" ]; then FLAGS="$FLAGS --fail-on ${{ inputs.fail-on }}"; fi
-        if [ -n "${{ inputs.always-fail-on }}" ]; then FLAGS="$FLAGS --always-fail-on ${{ inputs.always-fail-on }}"; fi
-        if [ "${{ inputs.net-new }}" = "true" ]; then FLAGS="$FLAGS --include-findings"; fi
-        if [ "${{ inputs.sarif }}" = "true" ]; then FLAGS="$FLAGS --sarif /tmp/praxis-results.sarif"; fi
-
-        # Run scan and capture output
-        set +e
-        RESULT=$(praxis ci "${{ inputs.path }}" --threshold "${{ inputs.threshold }}" $FLAGS 2>&1)
-        EXIT_CODE=$?
-        set -e
-
-        # Extract JSON from output (pretty-printed object: from first '{' to end)
-        JSON_LINE=$(echo "$RESULT" | sed -n '/^[[:space:]]*{/,$p')
-
-        if [ -z "$JSON_LINE" ]; then
-          echo "::error::Praxis scan failed to produce output"
-          echo "$RESULT"
-          exit 1
-        fi
-
-        # Parse results
-        SCORE=$(echo "$JSON_LINE" | jq -r '.score // 0')
-        GRADE=$(echo "$JSON_LINE" | jq -r '.grade // "F"')
-        FINDINGS=$(echo "$JSON_LINE" | jq -r '.totalFindings // 0')
-        SECRETS=$(echo "$JSON_LINE" | jq -r '.categories.secrets.findingCount // 0')
-        VULNS=$(echo "$JSON_LINE" | jq -r '((.categories.injection.findingCount // 0) + (.categories.auth.findingCount // 0))')
-        CVES=$(echo "$JSON_LINE" | jq -r '.totalDepVulns // 0')
-        PASS=$(echo "$JSON_LINE" | jq -r '.pass // false')
-
-        # Set outputs
-        echo "score=$SCORE" >> $GITHUB_OUTPUT
-        echo "grade=$GRADE" >> $GITHUB_OUTPUT
-        echo "findings=$FINDINGS" >> $GITHUB_OUTPUT
-        echo "secrets=$SECRETS" >> $GITHUB_OUTPUT
-        echo "vulns=$VULNS" >> $GITHUB_OUTPUT
-        echo "cves=$CVES" >> $GITHUB_OUTPUT
-        if [ -f /tmp/praxis-results.sarif ]; then
-          echo "sarif-file=/tmp/praxis-results.sarif" >> $GITHUB_OUTPUT
-        fi
-
-        # Save full JSON for later steps
-        echo "$JSON_LINE" > /tmp/praxis-report.json
-
-        # Print summary to CI log
-        echo ""
-        echo "╔══════════════════════════════════════╗"
-        echo "║       Praxis Security Report      ║"
-        echo "╠══════════════════════════════════════╣"
-        printf "║  Score: %-5s  Grade: %-14s║\n" "$SCORE" "$GRADE"
-        printf "║  Findings: %-4s Secrets: %-11s║\n" "$FINDINGS" "$SECRETS"
-        printf "║  Vulns: %-6s CVEs: %-14s║\n" "$VULNS" "$CVES"
-        echo "╚══════════════════════════════════════╝"
-
-        # Generate GitHub Actions summary
-        cat >> $GITHUB_STEP_SUMMARY << EOF
-        ## 🛡️ Praxis Security Report
-
-        | Metric | Value |
-        |--------|-------|
-        | **Score** | $SCORE/100 ($GRADE) |
-        | **Findings** | $FINDINGS |
-        | **Secrets** | $SECRETS |
-        | **Code Vulns** | $VULNS |
-        | **CVEs** | $CVES |
-
-        EOF
-
-        # Determine pass/fail (CLI already applies threshold/fail-on logic)
-        FAIL=0
-        if [ "$PASS" != "true" ]; then
-          echo "::error::Security score $SCORE is below threshold ${{ inputs.threshold }}"
-          FAIL=1
-        fi
-
-        echo "fail=$FAIL" >> $GITHUB_OUTPUT
+        PRAXIS_ACTION_PATH: ${{ github.action_path }}
+        PRAXIS_INPUT_PATH: ${{ inputs.path }}
+        PRAXIS_INPUT_THRESHOLD: ${{ inputs.threshold }}
+        PRAXIS_INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        PRAXIS_INPUT_ALWAYS_FAIL_ON: ${{ inputs.always-fail-on }}
+        PRAXIS_INPUT_SARIF: ${{ inputs.sarif }}
+        PRAXIS_INPUT_DEEP: ${{ inputs.deep }}
+        PRAXIS_INPUT_DEPS: ${{ inputs.deps }}
+        PRAXIS_INPUT_BASELINE: ${{ inputs.baseline }}
+        PRAXIS_INPUT_NET_NEW: ${{ inputs.net-new }}
+        PRAXIS_INPUT_FAIL_ON_NEW: ${{ inputs.fail-on-new }}
+        PRAXIS_INPUT_COMMENT: ${{ inputs.comment }}
+        PRAXIS_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PRAXIS_PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: node "$PRAXIS_ACTION_PATH/cli/integrations/github-action.js"
 
     - name: Upload SARIF to GitHub Code Scanning
       if: inputs.sarif == 'true' && steps.scan.outputs.sarif-file != ''
       uses: github/codeql-action/upload-sarif@37f2634a92ba38a0926ef79a0748ac8ae7d95ab2 # v4.37.8
       with:
-        sarif_file: /tmp/praxis-results.sarif
+        sarif_file: ${{ steps.scan.outputs.sarif-file }}
         category: praxis
+        token: ${{ inputs.token }}
       continue-on-error: true
 
-    - name: Comment on PR
-      if: inputs.comment == 'true' && github.event_name == 'pull_request'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.token }}
-      run: |
-        SCORE="${{ steps.scan.outputs.score }}"
-        GRADE="${{ steps.scan.outputs.grade }}"
-        FINDINGS="${{ steps.scan.outputs.findings }}"
-        SECRETS="${{ steps.scan.outputs.secrets }}"
-        VULNS="${{ steps.scan.outputs.vulns }}"
-        CVES="${{ steps.scan.outputs.cves }}"
-        THRESHOLD="${{ inputs.threshold }}"
-
-        # Grade emoji
-        case "$GRADE" in
-          A) EMOJI="🟢" ;;
-          B) EMOJI="🟡" ;;
-          C) EMOJI="🟠" ;;
-          *) EMOJI="🔴" ;;
-        esac
-
-        # Build comment body
-        BODY="## $EMOJI Praxis Security Report
-
-        | Metric | Value |
-        |--------|-------|
-        | **Score** | **$SCORE**/100 ($GRADE) |
-        | **Findings** | $FINDINGS |
-        | **Secrets** | $SECRETS |
-        | **Code Vulns** | $VULNS |
-        | **CVEs** | $CVES |
-        | **Threshold** | $THRESHOLD |
-
-        "
-
-        if [ "$SCORE" -ge "$THRESHOLD" ]; then
-          BODY="$BODY> ✅ **Passed** — score meets the threshold of $THRESHOLD"
-        else
-          BODY="$BODY> ❌ **Failed** — score $SCORE is below threshold $THRESHOLD"
-        fi
-
-        BODY="$BODY
-
-        ---
-        <sub>🛡️ Scanned by [Praxis](https://github.com/Ganron007/Praxis) — AI-native security CLI</sub>"
-
-        # Find and update existing comment, or create new one
-        PR_NUMBER="${{ github.event.pull_request.number }}"
-        REPO="${{ github.repository }}"
-
-        EXISTING=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --jq '.[] | select(.body | contains("Praxis Security Report")) | .id' | head -1)
-
-        if [ -n "$EXISTING" ]; then
-          gh api "repos/$REPO/issues/comments/$EXISTING" -X PATCH -f body="$BODY"
-        else
-          gh api "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$BODY"
-        fi
-
-    - name: Net-new PR gate (base vs head)
-      if: inputs.net-new == 'true' && github.event_name == 'pull_request'
-      id: netnew
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.token }}
-      run: |
-        # Scan the PR base in a worktree and diff finding identities
-        BASE_SHA="${{ github.event.pull_request.base.sha }}"
-        echo "::group::Scanning base ref $BASE_SHA"
-        git fetch --depth 1 origin "$BASE_SHA"
-        git worktree add /tmp/praxis-base "$BASE_SHA" > /dev/null 2>&1 || true
-        set +e
-        BASE_JSON=$(cd /tmp/praxis-base && praxis ci . --json --include-findings --threshold 0 --no-deps 2>&1 | sed -n '/^[[:space:]]*{/,$p')
-        BASE_EXIT=$?
-        set -e
-        echo "::endgroup::"
-        if [ "$BASE_EXIT" -ne 0 ]; then
-          echo "::warning::Base scan failed — skipping net-new gate"
-          echo "introduced=0" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-
-        # Introduced = findings present in head but absent from base (file:rule identity)
-        FLOOR="${{ inputs.fail-on-new }}"
-        HEAD_JSON="/tmp/praxis-report.json"
-        echo "$BASE_JSON" > /tmp/praxis-base-report.json
-        INTRODUCED=$(jq -n \
-          --slurpfile base /tmp/praxis-base-report.json \
-          --slurpfile head "$HEAD_JSON" \
-          --arg floor "$FLOOR" '
-            ($base[0].findings // []) as $bf |
-            ($head[0].findings // []) as $hf |
-            ($bf | map(.file + ":" + (.rule // "")) | unique) as $baseIds |
-            ($hf | map(select(.file + ":" + (.rule // "") as $id | ($baseIds | index($id)) == null))) as $new |
-            { total: ($new | length),
-              blocking: ($new | map(select(.severity == $floor or .severity == "critical")) | length) }
-          ')
-
-        NEW_TOTAL=$(echo "$INTRODUCED" | jq -r '.total // 0')
-        NEW_BLOCKING=$(echo "$INTRODUCED" | jq -r '.blocking // 0')
-        echo "introduced=$NEW_TOTAL" >> $GITHUB_OUTPUT
-        echo "blocking=$NEW_BLOCKING" >> $GITHUB_OUTPUT
-        echo "::notice::Net-new gate: $NEW_TOTAL introduced finding(s), $NEW_BLOCKING at/above $FLOOR"
-        if [ "$NEW_BLOCKING" -gt 0 ]; then
-          echo "::error::PR introduces $NEW_BLOCKING finding(s) at/above severity $FLOOR"
-          echo "fail=1" >> $GITHUB_OUTPUT
-        else
-          echo "fail=0" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Fail on introduced findings
-      if: steps.netnew.outputs.fail == '1'
-      shell: bash
-      run: exit 1
-
-    - name: Check threshold
+    - name: Enforce security gate
       if: steps.scan.outputs.fail == '1'
       shell: bash
       run: exit 1

@@ -5,8 +5,8 @@
  * Reverts changes applied by `praxis fix interactive`.
  *
  * Reads .praxis/fixes.jsonl, takes the most recent entry (or all entries
- * with --all), and reverses each edit. Per-fix git commits made by the agent
- * are preferred over manual reversal when available.
+ * with --all), and reverses the recorded edits without changing unrelated files
+ * or the Git index. Failed reversals retain their log entry for a later retry.
  *
  * USAGE:
  *   praxis undo                Revert the last applied fix
@@ -16,7 +16,8 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execFileSync } from 'child_process';
+import writeFileAtomic from 'write-file-atomic';
+import { reversePlan } from '../core/fix-plan.js';
 import chalk from 'chalk';
 import * as output from '../utils/output.js';
 
@@ -32,11 +33,15 @@ export async function undoCommand(targetPath = '.', options = {}) {
     process.exit(1);
   }
 
-  const entries = fs.readFileSync(logPath, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map(line => { try { return JSON.parse(line); } catch { return null; } })
-    .filter(Boolean);
+  let entries;
+  try {
+    entries = fs.readFileSync(logPath, 'utf8').split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
+    if (entries.some(entry => !entry || typeof entry !== 'object' || Array.isArray(entry))) throw new Error('invalid entry');
+  } catch {
+    output.error('Fix log is malformed; repair it before undoing. No files were changed.');
+    process.exitCode = 1;
+    return;
+  }
 
   if (entries.length === 0) {
     output.error('Fix log is empty.');
@@ -53,6 +58,7 @@ export async function undoCommand(targetPath = '.', options = {}) {
 
   let reverted = 0;
   let failed   = 0;
+  const undone = new Set();
 
   for (const entry of toUndo) {
     const file = entry.file || entry.finding?.file || '(unknown)';
@@ -65,22 +71,25 @@ export async function undoCommand(targetPath = '.', options = {}) {
     }
 
     try {
-      reverseEntry(root, entry);
+      reversePlan(root, entry.plan);
       console.log(chalk.green('    Reverted.'));
       reverted++;
+      undone.add(entry);
     } catch (err) {
       console.log(chalk.red(`    Failed: ${err.message}`));
       failed++;
+      // Older fixes may depend on this one. Stop so the log remains a valid stack.
+      break;
     }
   }
 
   // Truncate the log
   if (!options.dryRun && reverted > 0) {
-    const remaining = options.all ? [] : entries.slice(0, -1);
+    const remaining = entries.filter(entry => !undone.has(entry));
     if (remaining.length === 0) {
       fs.unlinkSync(logPath);
     } else {
-      fs.writeFileSync(logPath, remaining.map(e => JSON.stringify(e)).join('\n') + '\n', 'utf8');
+      writeFileAtomic.sync(logPath, remaining.map(e => JSON.stringify(e)).join('\n') + '\n', { encoding: 'utf8' });
     }
   }
 
@@ -90,72 +99,8 @@ export async function undoCommand(targetPath = '.', options = {}) {
   console.log();
 
   if (failed > 0) {
-    console.log(chalk.gray('  For failed entries, try `git checkout` or `git reset --hard` if you committed via --branch.'));
+    process.exitCode = 1;
+    console.log(chalk.gray('  Failed and unattempted fixes remain in the log. Review the changed files before retrying.'));
     console.log();
-  }
-}
-
-function isGitRepo(dir) {
-  try {
-    execFileSync('git', ['-C', dir, 'rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function reverseEntry(root, entry) {
-  if (entry.commitHash && isGitRepo(root)) {
-    try {
-      execFileSync('git', ['-C', root, 'revert', '--no-commit', entry.commitHash], { stdio: 'ignore' });
-      return;
-    } catch {
-      console.log(chalk.yellow(`    Git revert failed for ${entry.commitHash.slice(0, 7)}. Falling back to manual text reversal.`));
-    }
-  }
-
-  const plan = entry.plan;
-  if (!plan || !Array.isArray(plan.files) || plan.files.length === 0) {
-    throw new Error('entry has no plan to reverse');
-  }
-
-  for (const fileChange of plan.files) {
-    const abs = path.resolve(root, fileChange.path);
-
-    if (fileChange.create) {
-      // We created the file — delete it
-      if (fs.existsSync(abs)) fs.unlinkSync(abs);
-      continue;
-    }
-
-    if (fileChange.append !== undefined) {
-      if (!fs.existsSync(abs)) continue;
-      const current = fs.readFileSync(abs, 'utf8');
-      // Try to remove the appended text (it may be at the end)
-      const idx = current.lastIndexOf(fileChange.append);
-      if (idx === -1) {
-        throw new Error(`appended text not found in ${fileChange.path}`);
-      }
-      const reverted = current.slice(0, idx) + current.slice(idx + fileChange.append.length);
-      fs.writeFileSync(abs, reverted, 'utf8');
-      continue;
-    }
-
-    // Standard edits — reverse find/replace
-    if (!fs.existsSync(abs)) {
-      throw new Error(`file no longer exists: ${fileChange.path}`);
-    }
-    let content = fs.readFileSync(abs, 'utf8');
-    // Reverse in opposite order in case edits are positionally dependent
-    const reversed = [...fileChange.edits].reverse();
-    for (const e of reversed) {
-      const newStr = e.replace;
-      const oldStr = e._resolvedFind || e.find;
-      if (!content.includes(newStr)) {
-        throw new Error(`reverted text not found in ${fileChange.path} (file changed since fix)`);
-      }
-      content = content.replace(newStr, oldStr);
-    }
-    fs.writeFileSync(abs, content, 'utf8');
   }
 }

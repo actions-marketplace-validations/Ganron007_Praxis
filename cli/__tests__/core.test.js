@@ -461,11 +461,12 @@ describe('action.yml Marketplace contract', async () => {
     const pkg = JSON.parse(fs.readFileSync(
       path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8',
     ));
-    const installSteps = action.runs.steps.filter(s => /npm install -g/.test(s.run || ''));
+    const installSteps = action.runs.steps.filter(s => /npm ci --prefix/.test(s.run || ''));
     assert.ok(installSteps.length > 0, 'action must install the CLI');
+    assert.equal(pkg.name, 'praxis-sec', 'this checkout must be the published Praxis CLI');
     for (const step of installSteps) {
-      assert.match(step.run, new RegExp(`npm install -g ${pkg.name}`),
-        `action installs the wrong package name; expected "${pkg.name}" in: ${step.run.trim()}`);
+      assert.equal(step.env.PRAXIS_ACTION_PATH, '${{ github.action_path }}');
+      assert.match(step.run, /npm ci --prefix "\$PRAXIS_ACTION_PATH"/, 'install the Action checkout from its lockfile');
     }
   });
 });

@@ -23,7 +23,14 @@ export const PATTERNS = [
   {
     rule: 'SQL_INJECTION_TEMPLATE_LITERAL',
     title: 'SQL Injection via Template Literal',
-    regex: /`(?:SELECT|INSERT|UPDATE|DELETE|DROP\s+TABLE|ALTER\s+TABLE|TRUNCATE|CREATE|REPLACE|MERGE)[^`]*\$\{/gi,
+    // Each keyword is anchored to the token SQL requires after it. The previous
+// `(?:SELECT|INSERT|...|CREATE|REPLACE|MERGE)[^`]*\$\{` matched the bare
+// keywords, so English words that merely start with one — created, updated,
+// deleted, inserted, replaced — fired a critical on any template literal like
+// `` `created file changed since fix: ${file.path}` ``. Anchoring also lets a
+// word that IS a keyword stand in for SQL only with its real continuation
+// (`MERGE INTO`, `SELECT ... FROM`), not `merge conflict`.
+regex: /`(?:SELECT\s+[\w*`,\s]{1,80}?\b(?:FROM|INTO|SET|VALUES|WHERE)\b|INSERT\s+INTO|UPDATE\s+[\w*`,\s]{1,80}?\bSET\b|DELETE\s+FROM|(?:DROP|ALTER)\s+TABLE|TRUNCATE\s+(?:TABLE\b|(?=[A-Za-z_]*\$\{))|CREATE\s+(?:TABLE|INDEX|UNIQUE|OR\s+REPLACE)|REPLACE\s+INTO|MERGE\s+INTO)[^`]*\$\{/gi,
     severity: 'critical',
     cwe: 'CWE-89',
     owasp: 'A03:2021',

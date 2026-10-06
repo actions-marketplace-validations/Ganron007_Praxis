@@ -79,11 +79,11 @@ export function parseGitUrl(target = '', options = {}) {
     raw = `https://${raw}`;
   }
 
-  let provider = 'git';
-  if (/github\.com/i.test(raw)) provider = 'github';
-  else if (/gitlab\.com/i.test(raw)) provider = 'gitlab';
-  else if (/bitbucket\.org/i.test(raw)) provider = 'bitbucket';
-  else if (/dev\.azure\.com/i.test(raw)) provider = 'azure';
+  let hostname = raw.match(/^git@([^:]+):/)?.[1]?.toLowerCase() || '';
+  try { hostname = new URL(raw).hostname.toLowerCase(); } catch { /* local clone path or SCP syntax */ }
+  const provider = {
+    'github.com': 'github', 'gitlab.com': 'gitlab', 'bitbucket.org': 'bitbucket', 'dev.azure.com': 'azure',
+  }[hostname] || 'git';
 
   // Extract clean repository name
   let repoName = 'repository';
@@ -95,7 +95,9 @@ export function parseGitUrl(target = '', options = {}) {
   const displayUrl = redactGitUrl(raw);
 
   // Auth token injection for private repositories (if requested)
-  const token = options.gitToken || process.env.PRAXIS_GIT_TOKEN || process.env.GITHUB_TOKEN || process.env.GIT_TOKEN;
+  // A GitHub credential must never be forwarded to another Git host or a lookalike.
+  const token = options.gitToken || process.env.PRAXIS_GIT_TOKEN || process.env.GIT_TOKEN ||
+    (hostname === 'github.com' ? process.env.GITHUB_TOKEN : undefined);
   let cloneUrl = raw;
 
   if (token && raw.startsWith('https://')) {

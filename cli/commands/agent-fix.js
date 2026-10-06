@@ -43,24 +43,9 @@ import { autoDetectProvider } from '../providers/llm-provider.js';
 import { auditCommand } from './audit.js';
 import { ASTParser } from '../core/ast/index.js';
 import * as output from '../utils/output.js';
+import { validatePlan, applyPlan, restoreSnapshots, isProtectedFixPath } from '../core/fix-plan.js';
 
 const SEV_RANK   = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-const NEVER_EDIT = [
-  /(^|\/)\.env(\.|$)/i,
-  /\.pem$|\.key$|\.p12$|\.pfx$/i,
-  /package-lock\.json$|yarn\.lock$|pnpm-lock\.yaml$/i,
-  /(^|\/)node_modules\//,
-  /(^|\/)dist\//,
-  /(^|\/)build\//,
-  /\.min\.(js|css)$/,
-];
-// Files the agent IS allowed to create or update freely (companions to fixes)
-const SAFE_NEW_FILES = [
-  /(^|\/)\.env\.example$/i,
-  /(^|\/)\.env\.sample$/i,
-  /(^|\/)\.gitignore$/i,
-];
-
 const FIX_LOG_DIR  = '.praxis';
 const FIX_LOG_FILE = 'fixes.jsonl';
 
@@ -160,7 +145,7 @@ export async function agentFixCommand(targetPath = '.', options = {}) {
     if (!f.file) return false;
     if ((SEV_RANK[f.severity] ?? 0) < minRank) return false;
     const rel = f.file.replace(/\\/g, '/');
-    if (NEVER_EDIT.some(p => p.test(rel))) return false;
+    if (isProtectedFixPath(rel)) return false;
     const abs = path.resolve(root, f.file);
     return fs.existsSync(abs);
   });
@@ -205,7 +190,7 @@ export async function agentFixCommand(targetPath = '.', options = {}) {
     let decision = null;
     let finalPlan = null;
     let finalVerified = null;
-    let snapshots = []; // pre-fix file state, captured once on first attempt
+    let snapshots = []; // files touched by the currently applied attempt
     let ladderFailed = false; // verification failed with nothing resolved
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -247,7 +232,7 @@ export async function agentFixCommand(targetPath = '.', options = {}) {
         break;
       }
 
-      // Decision (prompt once; retries reuse the first decision)
+      // Each distinct plan needs approval, unless an explicit auto mode is enabled.
       if (decision === null) {
         const risk = (plan.risk || 'medium').toLowerCase();
         if (options.yolo || options.ci) {
@@ -273,19 +258,10 @@ export async function agentFixCommand(targetPath = '.', options = {}) {
         break;
       }
 
-      // Apply — snapshot file state once (first attempt) so a failed ladder
-      // can restore the repo to its pre-fix state.
+      // Revalidate after approval and roll back a partially applied plan on error.
       let applyErr = null;
-      if (attempt === 1) {
-        snapshots = plan.files.map(fc => {
-          const abs = path.resolve(root, fc.path);
-          return { abs, existed: fs.existsSync(abs), content: fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null };
-        });
-      }
       try {
-        for (const fileChange of plan.files) {
-          applyEdit(root, fileChange);
-        }
+        snapshots = applyPlan(root, plan);
       } catch (err) {
         applyErr = err.message;
       }
@@ -320,6 +296,12 @@ export async function agentFixCommand(targetPath = '.', options = {}) {
 
       // Evidence-fed retry
       if (attempt < maxAttempts && verified.evidence) {
+        restoreSnapshots(snapshots);
+        snapshots = [];
+        finalPlan = null;
+        finalVerified = null;
+        ladderFailed = false;
+        decision = null; // a regenerated plan needs its own approval
         retryEvidence = verified.evidence;
         continue;
       }
@@ -329,12 +311,7 @@ export async function agentFixCommand(targetPath = '.', options = {}) {
     // Revert failed fixes (nothing resolved) so the repo stays consistent —
     // even when the retry plan itself failed to generate.
     if (ladderFailed && snapshots.length > 0) {
-      for (const s of snapshots) {
-        try {
-          if (s.existed) fs.writeFileSync(s.abs, s.content, 'utf8');
-          else if (fs.existsSync(s.abs)) fs.unlinkSync(s.abs);
-        } catch { /* best-effort restore */ }
-      }
+      restoreSnapshots(snapshots);
       console.log(chalk.yellow('      Reverted failed fix — file(s) restored to pre-fix state.'));
       logFailure(root, {
         timestamp: new Date().toISOString(),
@@ -599,108 +576,6 @@ function windowFileContent(content, fileFindings) {
 // PLAN VALIDATION
 // =============================================================================
 
-function validatePlan(root, plan) {
-  if (!Array.isArray(plan.files) || plan.files.length === 0) {
-    return { ok: false, reason: 'no files in plan' };
-  }
-
-  for (const f of plan.files) {
-    if (!f.path) return { ok: false, reason: 'file entry missing path' };
-
-    const rel       = f.path.replace(/\\/g, '/');
-    const isSafeNew = SAFE_NEW_FILES.some(p => p.test(rel));
-
-    // Block protected paths unless this is a known-safe companion file
-    if (!isSafeNew && NEVER_EDIT.some(p => p.test(rel))) {
-      return { ok: false, reason: `protected path: ${f.path}` };
-    }
-
-    const abs    = path.resolve(root, f.path);
-    const exists = fs.existsSync(abs);
-
-    // Companion file forms (create / append)
-    if (f.create || f.append !== undefined) {
-      if (!exists && !isSafeNew) {
-        return { ok: false, reason: `cannot create new file at ${f.path}` };
-      }
-      if (f.create && typeof f.content !== 'string') {
-        return { ok: false, reason: 'create entry missing content' };
-      }
-      if (f.append && typeof f.append !== 'string') {
-        return { ok: false, reason: 'append must be a string' };
-      }
-      continue;
-    }
-
-    // Standard edit form
-    if (!exists) return { ok: false, reason: `file not found: ${f.path}` };
-    if (!Array.isArray(f.edits) || f.edits.length === 0) {
-      return { ok: false, reason: `no edits for ${f.path}` };
-    }
-
-    const content = fs.readFileSync(abs, 'utf8');
-    for (const e of f.edits) {
-      if (typeof e.find !== 'string' || typeof e.replace !== 'string') {
-        return { ok: false, reason: 'edit missing find/replace' };
-      }
-      if (e.find === e.replace) {
-        return { ok: false, reason: 'edit is a no-op' };
-      }
-      const match = locateFindString(content, e.find);
-      if (match.kind === 'missing') {
-        return { ok: false, reason: `find string not present in ${f.path}` };
-      }
-      if (match.kind === 'ambiguous') {
-        return { ok: false, reason: `find string is ambiguous (${match.count} matches) in ${f.path}` };
-      }
-      // Annotate the edit with the resolved match for use during apply
-      e._resolvedFind = match.matched;
-    }
-  }
-  return { ok: true };
-}
-
-// Try exact match first, then whitespace-normalized match if exact misses.
-// Returns { kind: 'unique'|'ambiguous'|'missing', matched, count }
-function locateFindString(haystack, needle) {
-  const exact = countOccurrences(haystack, needle);
-  if (exact === 1) return { kind: 'unique', matched: needle, count: 1 };
-  if (exact > 1)   return { kind: 'ambiguous', matched: needle, count: exact };
-
-  // Whitespace-tolerant fallback: collapse whitespace runs and try again
-  const norm = (s) => s.replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
-  const needleNorm = norm(needle);
-  if (!needleNorm) return { kind: 'missing', matched: null, count: 0 };
-
-  // Walk the haystack and check if any window normalizes to the same string
-  // To keep this cheap, only attempt when needle has at least one newline (likely a code block)
-  const lines = haystack.split('\n');
-  const needleLines = needleNorm.split('\n').length;
-  let foundIdx = -1;
-  let foundCount = 0;
-  for (let i = 0; i + needleLines <= lines.length; i++) {
-    const window = lines.slice(i, i + needleLines).join('\n');
-    if (norm(window) === needleNorm) {
-      foundIdx = i;
-      foundCount++;
-      if (foundCount > 1) break;
-    }
-  }
-  if (foundCount === 1) {
-    const matched = lines.slice(foundIdx, foundIdx + needleLines).join('\n');
-    return { kind: 'unique', matched, count: 1 };
-  }
-  if (foundCount > 1) return { kind: 'ambiguous', matched: null, count: foundCount };
-  return { kind: 'missing', matched: null, count: 0 };
-}
-
-function countOccurrences(haystack, needle) {
-  if (!needle) return 0;
-  let count = 0, idx = 0;
-  while ((idx = haystack.indexOf(needle, idx)) !== -1) { count++; idx += needle.length; }
-  return count;
-}
-
 // =============================================================================
 // PRINTING
 // =============================================================================
@@ -767,36 +642,6 @@ function severityLabel(sev) {
 // =============================================================================
 // APPLY
 // =============================================================================
-
-function applyEdit(root, fileChange) {
-  const abs = path.resolve(root, fileChange.path);
-
-  if (fileChange.create) {
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, fileChange.content, 'utf8');
-    return;
-  }
-
-  if (fileChange.append !== undefined) {
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    const existing = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '';
-    // Avoid duplicate appends
-    if (existing.includes(fileChange.append.trim())) return;
-    const sep = existing && !existing.endsWith('\n') ? '\n' : '';
-    fs.writeFileSync(abs, existing + sep + fileChange.append, 'utf8');
-    return;
-  }
-
-  let content = fs.readFileSync(abs, 'utf8');
-  for (const e of fileChange.edits) {
-    const find = e._resolvedFind || e.find;
-    if (!content.includes(find)) {
-      throw new Error(`find string drifted in ${fileChange.path} (file changed mid-plan)`);
-    }
-    content = content.replace(find, e.replace);
-  }
-  fs.writeFileSync(abs, content, 'utf8');
-}
 
 // =============================================================================
 // VERIFY — tiered ladder (P-IMP-032)
@@ -884,8 +729,10 @@ async function rescanForFile(root, filePath, options) {
     ], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
 
     const jsonStart = stdout.search(/^\s*\{/m);
-    if (jsonStart === -1) return { findings: [] };
-    try { return JSON.parse(stdout.slice(jsonStart)); } catch { return { findings: [] }; }
+    if (jsonStart === -1) throw new Error('Sandbox re-scan produced no JSON');
+    const report = JSON.parse(stdout.slice(jsonStart));
+    if (!Array.isArray(report.findings)) throw new Error('Sandbox re-scan produced no finding list');
+    return report;
   }
   return auditCommand(root, { _agenticInner: true, deep: false, deps: false, noAi: true });
 }
@@ -1204,17 +1051,16 @@ async function promptDecision(plan, root) {
       if (!edited) {
         console.log(chalk.yellow('      Edit cancelled — keeping original plan.'));
       } else {
-        // Mutate plan in place so the caller's reference picks up the changes
-        plan.summary = edited.summary;
-        plan.files   = edited.files;
-        plan.risk    = edited.risk;
-        // Re-validate then re-show
-        const validation = validatePlan(root, plan);
+        const validation = validatePlan(root, edited);
         if (!validation.ok) {
           console.log(chalk.red(`      Edited plan invalid: ${validation.reason}`));
           console.log(chalk.gray('      Returning to prompt — try editing again, or skip.'));
           continue;
         }
+        // Replace the plan only after validation; an invalid edit cannot be accepted.
+        plan.summary = edited.summary;
+        plan.files   = edited.files;
+        plan.risk    = edited.risk;
         printPlan(plan, root);
       }
       // Loop back and re-prompt

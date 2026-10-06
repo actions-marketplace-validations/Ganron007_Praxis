@@ -17,7 +17,7 @@ import path from 'path';
 import { renderFindingsSARIF } from '../core/output/sarif.js';
 import chalk from 'chalk';
 import ora from 'ora';
-import fg from 'fast-glob';
+import fg from '../core/glob.js';
 import { buildOrchestrator, buildOrchestratorAsync } from '../agents/index.js';
 import { LegalRiskAgent } from '../agents/legal-risk-agent.js';
 import { ScoringEngine } from '../agents/scoring-engine.js';
@@ -45,7 +45,7 @@ import { generatePDF, generatePrintHTML, isChromeAvailable } from '../utils/pdf-
 import { SecretsVerifier } from '../utils/secrets-verifier.js';
 import { applyInlineAnnotations } from './autofix.js';
 import { buildScanFingerprint } from '../utils/scan-fingerprint.js';
-import { isGitUrl, cloneGitRepo } from '../core/git-clone.js';
+import { isGitUrl, cloneGitRepo, redactGitUrl } from '../core/git-clone.js';
 
 // =============================================================================
 // CONSTANTS
@@ -91,7 +91,7 @@ export async function auditCommand(targetPath = '.', options = {}) {
   // ── Remote Git Repository Support ─────────────────────────────────────────
   if (isGitUrl(targetPath)) {
     if (!machineOutput) printBanner();
-    const gitSpinner = machineOutput ? null : ora({ text: chalk.cyan(`Cloning remote Git repository: ${targetPath}...`), color: 'cyan' }).start();
+    const gitSpinner = machineOutput ? null : ora({ text: chalk.cyan(`Cloning remote Git repository: ${redactGitUrl(targetPath)}...`), color: 'cyan' }).start();
     try {
       gitClone = cloneGitRepo(targetPath, {
         branch: options.branch,
@@ -218,7 +218,7 @@ export async function auditCommand(targetPath = '.', options = {}) {
   }
 
   // ── Phase 2: Agent Scan ───────────────────────────────────────────────────
-  const orchestrator = await buildOrchestratorAsync(absolutePath, { quiet: true });
+  const orchestrator = await buildOrchestratorAsync(absolutePath, { quiet: true, trustPlugins: !gitClone && options.trustPlugins === true });
 
   // --hermes-only: filter to llm + supply-chain category agents only
   if (options.hermesOnly && orchestrator.agents) {
@@ -319,13 +319,6 @@ export async function auditCommand(targetPath = '.', options = {}) {
     }
   }
 
-  // ── Scan Playbook — update with latest recon + findings ─────────────────
-  try {
-    const playbook = new ScanPlaybook(absolutePath);
-    const suppressedRules = new SecurityMemory(absolutePath).list().map(e => e.rule).filter(Boolean);
-    playbook.update(recon, { score: scoreResult.score, grade: scoreResult.grade?.letter || scoreResult.grade, totalFindings: filteredFindings.length }, filteredFindings, suppressedRules);
-  } catch { /* non-fatal */ }
-
   // ── Security Memory Filter ──────────────────────────────────────────────
   // Auto-learn false positives from deep analysis results, then suppress
   // any finding that memory recognises from a previous scan.
@@ -352,6 +345,13 @@ export async function auditCommand(targetPath = '.', options = {}) {
   // Round score to 1 decimal place to avoid floating-point noise (e.g., 63.300000000000004)
   scoreResult.score = Math.round(scoreResult.score * 10) / 10;
   scoringEngine.saveToHistory(absolutePath, scoreResult, suppressions);
+
+  // Score and filtered findings must exist before the best-effort playbook update.
+  try {
+    const playbook = new ScanPlaybook(absolutePath);
+    const suppressedRules = secMemory.list().map(entry => entry.rule).filter(Boolean);
+    playbook.update(recon, { score: scoreResult.score, grade: scoreResult.grade?.letter || scoreResult.grade, totalFindings: filteredFindings.length }, filteredFindings, suppressedRules);
+  } catch { /* non-fatal */ }
 
   const gradeColor = scoreResult.score >= 75 ? chalk.green.bold : scoreResult.score >= 60 ? chalk.yellow.bold : chalk.red.bold;
   if (scoreSpinner) scoreSpinner.succeed(

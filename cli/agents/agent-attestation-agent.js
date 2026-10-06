@@ -287,11 +287,20 @@ export class AgentAttestationAgent extends BaseAgent {
       // This lane bypasses scanFileWithPatterns, so honour the documented
       // suppression comment here too — it was silently ignored before.
       const ruleTable = ruleTableLineMask(lines);
+      // In a package manifest every `"url"` is npm metadata — bugs, repository,
+      // homepage, funding — pointing at a human, never fetched at runtime, and
+      // npm has no `integrity` field that would pin one. Applying ASI-10 there
+      // reported a high on essentially every published package that declares
+      // `bugs.url`. The rule still applies to agent/manifest configs, which is
+      // where a remote resource is actually loaded.
+      const patterns = isPackageJson
+        ? PATTERNS.filter(p => p.rule !== 'AGENT_NO_INTEGRITY_HASH')
+        : PATTERNS;
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (ruleTable && ruleTable.has(i)) continue;
         if (this.isSuppressed(line)) continue;
-        for (const pattern of PATTERNS) {
+        for (const pattern of patterns) {
           pattern.regex.lastIndex = 0;
           if (pattern.regex.test(line)) {
             findings.push(createFinding({

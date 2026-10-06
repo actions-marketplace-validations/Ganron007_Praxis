@@ -896,8 +896,8 @@ praxis project policy init
 
 ### `.praxis/agents/*.js`
 
-Custom agent plugins, auto-discovered when running scans from a project
-that contains them. Scaffold one with:
+Custom agent plugins, loaded only when a local scan uses `--trust-plugins`.
+Scaffold one with:
 
 ```bash
 praxis project plugins new my-rule
@@ -906,7 +906,7 @@ praxis project plugins new my-rule
 A plugin is any module exporting a class extending `BaseAgent`:
 
 ```js
-import { BaseAgent, createFinding } from 'praxis';
+import { BaseAgent, createFinding } from 'praxis-sec';
 
 export default class MyAgent extends BaseAgent {
   constructor() { super('MyAgent', 'description', 'category'); }
@@ -1095,14 +1095,21 @@ praxis fix undo --all
 
 ## Custom plugins
 
-Praxis discovers plugins from `.praxis/agents/` automatically when scans run
-from that project root. The discovery uses `buildOrchestratorAsync(rootPath)` —
-the synchronous `buildOrchestrator()` skips plugin loading.
+Praxis loads plugins from `.praxis/agents/` only with explicit trust:
+
+```bash
+praxis scan full . --trust-plugins
+```
+
+Plugins execute arbitrary JavaScript with your permissions. Remote repository and
+web scans do not execute target plugins. Programmatic callers opt in with
+`buildOrchestratorAsync(rootPath, { trustPlugins: true })`; the synchronous
+`buildOrchestrator()` uses only built-in agents.
 
 A plugin extends `BaseAgent` and follows the standard contract:
 
 ```js
-import { BaseAgent, createFinding } from 'praxis';
+import { BaseAgent, createFinding } from 'praxis-sec';
 
 export default class HardcodedAdminCheck extends BaseAgent {
   constructor() {
@@ -1151,7 +1158,7 @@ plugin-side wiring required.
 | --- | --- |
 | `praxis intel update` is slow | NVD rate-limits to 6s/request without a key. Set `NVD_API_KEY`. |
 | `praxis scan ci --strict-intel` fails locally | Run `praxis intel update` first. Default freshness window is `7d`. |
-| Custom plugins not loading | Make sure you're running through `buildOrchestratorAsync(rootPath)` — the default `praxis scan` does this; programmatic API callers using `buildOrchestrator()` won't get plugins. |
+| Custom plugins not loading | Use `praxis scan full . --trust-plugins` for a trusted local project, or `buildOrchestratorAsync(rootPath, { trustPlugins: true })`. Remote and web scans use built-in agents only. |
 | `node cli/bin/praxis.js` works but `praxis` doesn't | Run `npm link` once (or `npm install -g .` from the repo). |
 | Test files report secrets | Confidence is auto-downgraded in test/doc/example paths — but use `praxis-ignore` for explicit suppression. |
 | Feed lives somewhere else | Override `HOME` (Unix) or `USERPROFILE` (Windows) — used by the test suite. |
