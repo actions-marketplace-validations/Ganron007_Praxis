@@ -1,6 +1,6 @@
 # Launch Day Security Checklist
 
-**Complete this checklist before you go live. Each item takes under 1 minute to verify.**
+Use this checklist to plan release verification. The checks are starting points; their effort and required evidence depend on the application.
 
 ---
 
@@ -13,11 +13,11 @@
 ```bash
 curl -I https://yoursite.com/.git/config
 ```
-If you get a 200 response, your git folder is exposed.
+Inspect the response body: a 200 response alone may be a generic application page. Confirm that Git metadata is inaccessible.
 
 **Fix:** Configure your web server to deny access to `.git`:
 - Nginx: `location ~ /\.git { deny all; }`
-- Vercel/Netlify: Already blocked by default
+- Hosted platforms: verify the deployed behavior rather than assuming a default
 
 ---
 
@@ -136,7 +136,6 @@ Try accessing:
 - `/admin`
 - `/api/admin`
 - `/dashboard`
-- `/_next` (for Next.js internal routes)
 
 **Fix:**
 - Add authentication middleware to all admin routes
@@ -151,7 +150,7 @@ Try accessing:
 - [ ] **CORS configured:** Not set to `*` in production
 - [ ] **Cookies secured:** `HttpOnly`, `Secure`, `SameSite` flags set
 - [ ] **File uploads validated:** Check file types, not just extensions
-- [ ] **SQL/NoSQL injection tested:** Try `'; DROP TABLE users;--` in input fields
+- [ ] **SQL/NoSQL injection tested:** Use harmless probes in an authorized test environment and verify parameterized queries
 
 ---
 
@@ -161,8 +160,8 @@ Security is ongoing. Schedule monthly reviews:
 1. Re-run this checklist
 2. Check for dependency updates
 3. Review access logs for suspicious activity
-4. Rotate API keys quarterly
+4. Review credential exposure and rotate keys according to provider guidance and incident requirements
 
 ---
 
-**You've got this. Ship it.**
+Record the evidence, unresolved findings, and the owner of each release decision.

@@ -217,11 +217,7 @@ export class MemoryPoisoningAgent extends BaseAgent {
       dot: true,
     });
 
-    const docFiles = await fg(DOC_GLOBS, {
-      cwd: rootPath,
-      absolute: true,
-      dot: true,
-    });
+    const docFiles = await this.discoverFiles(rootPath, DOC_GLOBS);
 
     // Scan memory files with higher severity (direct agent context)
     for (const file of memoryFiles) {

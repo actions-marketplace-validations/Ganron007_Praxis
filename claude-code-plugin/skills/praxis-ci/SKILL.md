@@ -1,86 +1,30 @@
 ---
 name: praxis-ci
-description: Run Praxis in CI mode — compact output, exit codes, SARIF generation. Use when the user wants to set up CI/CD security gates or test their pipeline configuration.
-argument-hint: "[path] [--threshold <score>] [--fail-on <severity>] [--sarif <file>]"
+description: Configure Praxis CI gates with correct exit status, report formats and permissions.
+argument-hint: "[path] [--threshold <score>] [--fail-on <severity>]"
 ---
 
-# Praxis — CI Pipeline Mode
+# praxis-ci
 
-You are helping the user set up Praxis as a security gate in their CI/CD pipeline.
+Use a preinstalled Praxis CLI 1.2.4 or newer; check `praxis --version`.
+Resolve the requested directory and pass arguments literally. `$ARGUMENTS`
+below is a placeholder for user-selected arguments, not shell code to evaluate.
+Keep stdout, stderr, and exit status separate. Never display credential values.
 
-## Step 1: Run CI scan
+Run the selected directory through the CI gate:
 
 ```bash
-npx praxis-sec@latest ci $ARGUMENTS 2>/dev/null
+praxis scan ci . --fail-on high --json
 ```
 
-Default: pass/fail based on score >= 75.
+Exit 0 means the enabled gate passed. Exit 1 may mean findings exceeded the gate
+or a required scan stage failed. Report the distinction and inspect completion.
+Use `--threshold` for a score gate, `--baseline` for reviewed debt, and
+`--sarif results.sarif` for compatible SARIF integrations.
 
-### Options:
-- `--threshold 60` — custom passing score
-- `--fail-on critical` — only fail on critical findings
-- `--fail-on high` — fail on critical or high
-- `--sarif results.sarif` — SARIF output for GitHub Code Scanning
-- `--baseline` — only check new findings
-- `--json` — JSON output for custom integrations
-- `--no-deps` — skip dependency audit
-
-## Step 2: Interpret results
-
-The command outputs a compact one-line summary:
-```
-[praxis] Score: 82/100 (B) | Findings: 12 (0C 3H 9M) | CVEs: 2 | 4.2s
-[praxis] PASS
-```
-
-Or on failure:
-```
-[praxis] Score: 58/100 (C) | Findings: 25 (3C 8H 14M) | CVEs: 5 | 6.1s
-[praxis] FAIL: Score 58 < threshold 75
-```
-
-Exit code 0 = pass, exit code 1 = fail.
-
-## Step 3: Help set up CI integration
-
-Based on the user's CI platform, offer to create or update their workflow file:
-
-### GitHub Actions
-```yaml
-- name: Security Scan
-  run: npx praxis-sec@latest ci . --threshold 75 --sarif results.sarif
-
-- name: Upload SARIF
-  if: always()
-  uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: results.sarif
-```
-
-### GitLab CI
-```yaml
-security-scan:
-  script:
-    - npx praxis-sec@latest ci . --threshold 75 --json > security-report.json
-  artifacts:
-    reports:
-      sast: security-report.json
-```
-
-### Generic CI
-```bash
-npx praxis-sec@latest ci . --threshold 75 || exit 1
-```
-
-## Step 4: Suggest baseline workflow
-
-If there are many findings:
-1. Create a baseline: `npx praxis-sec baseline .`
-2. Use `--baseline` in CI to only catch new vulnerabilities
-3. Gradually fix baselined issues over time
-
-## Important Notes
-
-- CI mode suppresses all spinners and color for clean log output
-- The SARIF file can be uploaded to GitHub Code Scanning for inline PR annotations
-- Use `--fail-on critical` for a gradual rollout — start strict only for critical issues
+For GitHub use the complete, permission-scoped Action workflow in
+[the usage guide](../../../docs/USAGE.md#cicd-integration), pinned to `v1.2.4`
+or its commit. For a plain CLI job, install `praxis-sec@1.2.4` after npm
+publication and keep its exit status. Store JSON as a regular artifact;
+Praxis JSON is not GitLab's SAST schema. Explain net-new comparison, the
+`always-fail-on` floor, and skipped dependency checks when configured.

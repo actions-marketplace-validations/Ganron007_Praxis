@@ -34,10 +34,12 @@
 
 import fs from 'fs';
 import path from 'path';
+import writeFileAtomic from 'write-file-atomic';
 import { displayPath } from '../core/paths.js';
+import { validateDir } from '../core/fs.js';
 import fg from '../core/glob.js';
 import { SECRET_PATTERNS, SKIP_DIRS, SKIP_EXTENSIONS, SKIP_FILENAMES, TEST_FILE_PATTERNS, MAX_FILE_SIZE } from '../utils/patterns.js';
-import { isHighEntropyMatch } from '../utils/entropy.js';
+import { isHighEntropyMatch, isDocumentedSecretExample } from '../utils/entropy.js';
 import { buildOrchestrator } from '../agents/index.js';
 import { ScoringEngine } from '../agents/scoring-engine.js';
 import { autoDetectProvider } from '../providers/llm-provider.js';
@@ -91,7 +93,7 @@ const TOOLS = [
   },
   {
     name: 'scan_repo',
-    description: 'Run a full multi-agent security scan on a repository or directory. Runs all 20+ praxis security agents (injection, auth bypass, secrets, supply chain, LLM security, etc.) and returns a structured findings report with severity ratings and remediation advice. Use this when the user asks to audit, scan, or check the security of their project.',
+    description: 'Run a full multi-agent security scan on a repository or directory. Runs the 28 built-in Praxis security agents (injection, auth bypass, secrets, supply chain, LLM security, etc.) and returns a structured findings report with severity ratings and remediation advice. Use this when the user asks to audit, scan, or check the security of their project.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -118,7 +120,7 @@ const TOOLS = [
   },
   {
     name: 'get_findings',
-    description: 'Read and return findings from a praxis JSON report file previously saved by scan_repo or the praxis CLI (npx praxis-sec audit --json). Useful for reviewing or referencing a prior scan without re-running it.',
+    description: 'Read and return findings from a praxis JSON report file previously saved by scan_repo or the praxis CLI (praxis scan full --json). Useful for reviewing or referencing a prior scan without re-running it.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -253,11 +255,10 @@ async function analyzeFile({ path: filePath }) {
   };
 }
 
-async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, outputFile }) {
-  const rootPath = path.resolve(targetPath);
-
-  if (!fs.existsSync(rootPath)) {
-    return { error: `Path does not exist: ${rootPath}` };
+export async function mcpScanRepo({ path: targetPath, agents: agentFilter, llm = false, outputFile }, orchestrator = buildOrchestrator()) {
+  const rootPath = validateDir(targetPath, { exitOnMissing: false });
+  if (!rootPath) {
+    return { error: 'Repository scans require an existing directory', scanComplete: false };
   }
 
   // MCP communicates over stdout as JSON-RPC. Suppress all console output during
@@ -270,16 +271,15 @@ async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, ou
   console.log = console.warn = console.error = console.info = noop;
 
   try {
-    const orchestrator = buildOrchestrator();
-    const context = { rootPath };
-
     // Run all agents (quiet:true suppresses ora spinners; console is already nulled)
-    const { findings, recon } = await orchestrator.runAll(rootPath, {
+    const { findings, recon, agentResults } = await orchestrator.runAll(rootPath, {
       agents: agentFilter,
       timeout: 30000,
       concurrency: 6,
       quiet: true,
     });
+    const scanErrors = (agentResults ?? []).filter(result => result.success === false)
+      .map(result => ({ stage: 'agent', agent: result.agent, message: result.error || 'Agent failed' }));
 
     // Optional: LLM deep analysis
     let deepStats = null;
@@ -289,12 +289,16 @@ async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, ou
         const analyzer = new DeepAnalyzer({ provider, budgetCents: 50, verbose: false });
         await analyzer.analyze(findings, { rootPath, recon });
         deepStats = analyzer.getStats();
+      } else {
+        scanErrors.push({ stage: 'deep-analysis', message: 'Requested LLM analysis has no configured provider' });
       }
     }
 
     // Score
     const scorer = new ScoringEngine();
-    const { score, grade } = scorer.score(findings);
+    const scoreResult = scorer.compute(findings);
+    const score = scoreResult.score;
+    const grade = scoreResult.grade.letter;
 
     const SEV_ORDER = ['critical', 'high', 'medium', 'low'];
     const bySeverity = {};
@@ -305,6 +309,9 @@ async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, ou
     const report = {
       scannedAt: new Date().toISOString(),
       rootPath,
+      scanComplete: scanErrors.length === 0,
+      scanErrors,
+      dependencyAudit: 'skipped',
       score,
       grade,
       totalFindings: findings.length,
@@ -322,7 +329,7 @@ async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, ou
         ...(f.deepAnalysis ? { deepAnalysis: f.deepAnalysis } : {}),
       })),
       ...(deepStats ? { deepAnalysis: deepStats } : {}),
-      summary: `Score: ${score}/100 (${grade}) — ${findings.length} finding(s): ${bySeverity.critical} critical, ${bySeverity.high} high, ${bySeverity.medium} medium, ${bySeverity.low} low.`,
+      summary: `${scanErrors.length ? 'Incomplete scan. ' : ''}Score: ${score}/100 (${grade}) — ${findings.length} finding(s): ${bySeverity.critical} critical, ${bySeverity.high} high, ${bySeverity.medium} medium, ${bySeverity.low} low.`,
     };
 
     if (outputFile) {
@@ -333,7 +340,7 @@ async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, ou
 
     return report;
   } catch (err) {
-    return { error: `Scan failed: ${err.message}` };
+    return { error: `Scan failed: ${err.message}`, scanComplete: false, scanErrors: [{ stage: 'scan', message: err.message }] };
   } finally {
     // Always restore console so other tool calls are not affected
     console.log   = savedLog;
@@ -343,7 +350,7 @@ async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, ou
   }
 }
 
-function getFindings({ reportPath, severity }) {
+export function mcpGetFindings({ reportPath, severity }) {
   const absPath = path.resolve(reportPath);
 
   if (!fs.existsSync(absPath)) {
@@ -368,6 +375,9 @@ function getFindings({ reportPath, severity }) {
     scannedAt:     report.scannedAt,
     score:         report.score,
     grade:         report.grade,
+    scanComplete:  report.scanComplete,
+    scanErrors:    report.scanErrors,
+    dependencyAudit: report.dependencyAudit,
     totalFindings: filtered.length,
     bySeverity:    report.bySeverity,
     findings:      filtered,
@@ -376,7 +386,7 @@ function getFindings({ reportPath, severity }) {
   };
 }
 
-function suppressFinding({ file, line, reason }) {
+export function mcpSuppressFinding({ file, line, reason }) {
   const absPath = path.resolve(file);
 
   if (!fs.existsSync(absPath)) {
@@ -393,7 +403,7 @@ function suppressFinding({ file, line, reason }) {
   const lines = content.split('\n');
   const lineIdx = line - 1; // Convert to 0-indexed
 
-  if (lineIdx < 0 || lineIdx >= lines.length) {
+  if (!Number.isInteger(line) || lineIdx < 0 || lineIdx >= lines.length) {
     return { error: `Line ${line} is out of range (file has ${lines.length} lines)` };
   }
 
@@ -411,7 +421,23 @@ function suppressFinding({ file, line, reason }) {
     return { error: `Cannot suppress critical severity finding: ${criticalFinding.description}` };
   }
 
-  // Log suppression request to .praxis/suppressions.json for manual audit
+  const isSlashComment = /\.(js|ts|jsx|tsx|mjs|cjs|java|c|cpp|cs|go|rs|swift|kt)$/i.test(file);
+  const isHashComment = /\.(py|rb|sh|bash|yaml|yml|toml)$/i.test(file);
+  if (!isSlashComment && !isHashComment) {
+    return { error: 'Suppression requires a supported source-code comment syntax' };
+  }
+  const safeReason = String(reason ?? '').replace(/[\r\n\u2028\u2029]/g, ' ').trim();
+  if (!safeReason) return { error: 'A suppression reason is required' };
+  const ignoreComment = `${isHashComment ? '#' : '//'} praxis-ignore — ${safeReason}`;
+  const cr = targetLine.endsWith('\r') ? '\r' : '';
+  lines[lineIdx] = `${targetLine.replace(/\r$/, '')} ${ignoreComment}${cr}`;
+  try {
+    writeFileAtomic.sync(absPath, lines.join('\n'), { encoding: 'utf8' });
+  } catch (err) {
+    return { error: `Cannot write file: ${err.message}` };
+  }
+
+  // Log only successful suppression writes for manual audit.
   const suppressionsDir = path.join(process.cwd(), '.praxis');
   if (!fs.existsSync(suppressionsDir)) {
     try {
@@ -428,7 +454,7 @@ function suppressFinding({ file, line, reason }) {
   suppressions.push({
     file: path.relative(process.cwd(), absPath),
     line,
-    reason,
+    reason: safeReason,
     timestamp: new Date().toISOString(),
     status: 'pending_review'
   });
@@ -436,38 +462,13 @@ function suppressFinding({ file, line, reason }) {
     fs.writeFileSync(suppressionsFile, JSON.stringify(suppressions, null, 2), 'utf-8');
   } catch {}
 
-  // Detect indentation and comment style
-  const indent = targetLine.match(/^(\s*)/)?.[1] ?? '';
-  const isJs   = /\.(js|ts|jsx|tsx|mjs|cjs|java|c|cpp|cs|go|rs|swift|kt)$/.test(file);
-  const isPy   = /\.py$/.test(file);
-  const isRb   = /\.rb$/.test(file);
-  const isHtml = /\.(html?|vue|svelte)$/.test(file);
-
-  let ignoreComment;
-  if (isHtml) {
-    ignoreComment = `${indent}<!-- praxis-ignore — ${reason} -->`;
-  } else if (isPy || isRb) {
-    ignoreComment = `${indent}# praxis-ignore — ${reason}`;
-  } else {
-    ignoreComment = `${indent}// praxis-ignore — ${reason}`;
-  }
-
-  // Insert ignore comment on the line BEFORE the finding
-  lines.splice(lineIdx, 0, ignoreComment);
-
-  try {
-    fs.writeFileSync(absPath, lines.join('\n'), 'utf-8');
-  } catch (err) {
-    return { error: `Cannot write file: ${err.message}` };
-  }
-
   return {
     suppressed:    true,
     file:          absPath,
     originalLine:  line,
-    insertedLine:  line, // The ignore comment is now on this line, original moved to line+1
+    insertedLine:  line,
     comment:       ignoreComment,
-    message:       `Added praxis-ignore comment before line ${line} in ${path.basename(file)}.`,
+    message:       `Added trailing praxis-ignore comment on line ${line} in ${path.basename(file)}.`,
   };
 }
 
@@ -506,6 +507,7 @@ function scanFile(filePath) {
         pattern.pattern.lastIndex = 0;
         let match;
         while ((match = pattern.pattern.exec(line)) !== null) {
+          if (isDocumentedSecretExample(pattern.name, match[0])) continue;
           if (pattern.requiresEntropyCheck && !isHighEntropyMatch(match[0])) continue;
           findings.push({
             line: lineNum + 1,
@@ -629,13 +631,13 @@ async function handleRequest(request) {
             result = await analyzeFile(args);
             break;
           case 'scan_repo':
-            result = await scanRepo(args);
+            result = await mcpScanRepo(args);
             break;
           case 'get_findings':
-            result = getFindings(args);
+            result = mcpGetFindings(args);
             break;
           case 'suppress_finding':
-            result = suppressFinding(args);
+            result = mcpSuppressFinding(args);
             break;
           case 'explain_and_fix':
             result = await explainAndFix(args);

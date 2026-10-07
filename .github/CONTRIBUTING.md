@@ -1,12 +1,12 @@
 # Contributing to Praxis
 
 Thanks for considering a contribution. Praxis is a single-binary, AI-native
-security CLI — ESM Node.js ≥18, no build step, runs from source.
+security CLI — ESM Node.js ≥18, no CLI build step, runs from source.
 
 ## Quick start
 
 ```bash
-npm install
+npm ci
 npm test
 npm run lint
 node cli/bin/praxis.js scan .   # dogfood — CI runs this, keep it green
@@ -52,10 +52,21 @@ node scripts/check-determinism.mjs .     # two scans must agree on file::rule
 
 CI runs the test matrix on Node 18, 20, 22 and 24, plus a determinism gate and a package
 build. A detection change is expected to alter results — the determinism gate exists so
-that change is *deliberate and visible*, not silent.
+that identical inputs produce stable finding identities. Intended rule changes
+between commits do not excuse drift between two runs of the same checkout.
 
-The self-scan currently reports **307 findings and zero criticals**. Suppress with
-`.praxisignore` or an inline `praxis-ignore` annotation. The annotation must be a **trailing
+Before releasing, run `npm run release:check` and follow
+[the release procedure](../docs/RELEASING.md). It also checks the editor build,
+runtime tests, dependency audit, and an installed package.
+
+Keep secret redaction, scan-completion status, and path boundaries intact. All
+HTML output must escape interpolated values and use the shared theme/severity
+sanitizer. Vendored data changes must update
+[third-party notices](../docs/THIRD_PARTY_NOTICES.md).
+
+CI requires a complete self-scan with zero critical findings; finding totals can
+vary with repository history and local configuration. Review a finding before
+using `.praxisignore` or an inline `praxis-ignore` annotation. The annotation must be a **trailing
 comment on the matched line** — `base-agent.js` checks the finding's own line, so placing it
 on the preceding line does nothing at all.
 

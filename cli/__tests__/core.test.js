@@ -220,6 +220,14 @@ describe('cli/core/paths', async () => {
     }
   });
 
+  it('keeps dot-prefixed in-root folders and hides foreign backslash paths', () => {
+    const root = path.resolve('test-project');
+    assert.equal(displayPath(path.join(root, '..cache', 'app.js'), root), '..cache/app.js');
+    const foreignRoot = path.join(path.sep, 'srv', 'app');
+    assert.equal(displayPath('C:\\foreign-user\\work\\app.js', foreignRoot), 'app.js');
+    assert.equal(displayPath('\\\\foreign-host\\share\\app.js', foreignRoot), 'app.js');
+  });
+
   it('no command may relativise a finding path with path.relative', () => {
     // Structural guard, and the guard that matters most here. Findings arrive
     // display-ready from the orchestrator, so every renderer must use

@@ -1,79 +1,33 @@
 ---
 name: praxis-fix
-description: Auto-fix security issues — remediate hardcoded secrets and common vulnerabilities (TLS bypass, debug mode, XSS, shell injection, Docker :latest). Use when the user wants to automatically fix security findings.
+description: Preview deterministic Praxis fixes, apply authorized changes, and re-scan for verification.
 argument-hint: "[path] [--all] [--dry-run]"
 ---
 
-# Praxis — Auto-Fix Security Issues
+# praxis-fix
 
-You are using Praxis's remediation engine to automatically fix security issues in this project.
+Use a preinstalled Praxis CLI 1.2.4 or newer; check `praxis --version`.
+Resolve the requested directory and pass arguments literally. `$ARGUMENTS`
+below is a placeholder for user-selected arguments, not shell code to evaluate.
+Keep stdout, stderr, and exit status separate. Never display credential values.
 
-## Step 1: Preview the fixes
-
-Always start with a dry run to show what will change:
-
-```bash
-npx praxis-sec@latest remediate $ARGUMENTS --dry-run 2>&1
-```
-
-If `$ARGUMENTS` is empty, default to `. --all` (fix both secrets and agent findings):
+Start with a preview for the requested project:
 
 ```bash
-npx praxis-sec@latest remediate . --all --dry-run 2>&1
+praxis fix quick . --all --dry-run
 ```
 
-**Flags:**
-- No `--all` flag → only fixes hardcoded secrets (moves to env vars)
-- With `--all` → also fixes: TLS bypass (`rejectUnauthorized: false`), Docker `:latest` tags, debug mode enabled, `dangerouslySetInnerHTML` without sanitization, `shell: true` in exec/spawn
-
-## Step 2: Present the preview
-
-Show the user what will be changed:
-1. List each file that will be modified
-2. Show the before/after for each change
-3. Group by fix type (secrets, TLS, Docker, debug, XSS, shell)
-4. Note any files that will be created (`.env.example`, `.env`)
-
-## Step 3: Apply fixes (with confirmation)
-
-Ask the user if they want to proceed. If yes:
+Show files, proposed changes, required dependencies and possible behavior changes.
+Keep the same directory and options when applying. If the user already authorized
+these reviewed changes, proceed; otherwise obtain approval for the concrete diff.
 
 ```bash
-npx praxis-sec@latest remediate . --all --yes 2>&1
+praxis fix quick . --all --yes
+praxis scan full . --json --no-ai
 ```
 
-If the user only wants to fix secrets (not agent findings):
-
-```bash
-npx praxis-sec@latest remediate . --yes 2>&1
-```
-
-## Step 4: Post-fix verification
-
-After applying fixes:
-
-1. Run a quick scan to verify secrets were removed:
-   ```bash
-   npx praxis-sec@latest scan . --json 2>/dev/null
-   ```
-
-2. Report the results — how many issues were fixed vs. remaining
-
-3. For remaining issues that couldn't be auto-fixed, offer to fix them manually by reading the code and applying targeted changes
-
-## Step 5: Follow-up actions
-
-Suggest:
-- **Review `.env.example`** — make sure variable names make sense
-- **Add `.env` to `.gitignore`** if not already there
-- **Rotate exposed secrets** — run `npx praxis-sec rotate .` for step-by-step guides
-- **Update baseline** — run `/praxis-baseline .` to update after fixes
-- **Stage changes** — offer to stage the modified files with git
-
-## Important Notes
-
-- Praxis creates a backup before modifying files — the user can revert if something breaks
-- The `--all` flag is important for fixing agent-level findings beyond just secrets
-- Never display actual secret values, even in the dry run output
-- If a fix might break functionality (e.g., `shell: false` in exec), warn the user to test
-- For `dangerouslySetInnerHTML` fixes, note that `DOMPurify` needs to be installed: `npm install dompurify`
+Require a complete verification scan and relevant project tests before reporting
+resolution. Disclose remaining findings and skipped checks. Deterministic quick
+fixes have a different backup mechanism from the interactive fix ledger; do not
+claim `fix undo` reverses every quick fix. Use `praxis fix .` for interactive
+LLM plans, and `praxis fix rotate .` for credential rotation guidance.

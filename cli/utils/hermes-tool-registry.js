@@ -62,7 +62,9 @@ export const HERMES_TOOLS = [
     },
     handler: async ({ path: scanPath, severity = 'medium', deep = false }) => {
       const { auditCommand } = await import('../commands/audit.js');
-      return auditCommand(scanPath, { severity, deep, json: true, quiet: true });
+      const report = await auditCommand(scanPath, { deep, _agenticInner: true, deps: false, noAi: true });
+      const ranks = { critical: 4, high: 3, medium: 2, low: 1 };
+      return { ...report, findings: report.findings.filter(f => (ranks[f.severity] ?? 0) >= (ranks[severity] ?? 0)) };
     },
   },
 
@@ -86,7 +88,7 @@ export const HERMES_TOOLS = [
     },
     handler: async ({ target }) => {
       const { scanMcpCommand } = await import('../commands/scan-mcp.js');
-      return scanMcpCommand(target, { json: true });
+      return scanMcpCommand(target, { json: true, quiet: true });
     },
   },
 
@@ -115,7 +117,7 @@ export const HERMES_TOOLS = [
     },
     handler: async ({ path: projectPath, severity = 'medium' }) => {
       const { mcpGetFindings } = await import('../commands/mcp.js');
-      return mcpGetFindings({ projectPath, severity });
+      return mcpGetFindings({ reportPath: path.join(projectPath, '.praxis', 'last-report.json'), severity });
     },
   },
 
@@ -123,7 +125,7 @@ export const HERMES_TOOLS = [
     name: 'praxis_suppress_finding',
     description:
       'Suppress a known-safe finding by inserting an inline praxis-ignore comment ' +
-      'in the source file before the flagged line. Use only when the finding is a ' +
+      'on the flagged source line. Use only when the finding is a ' +
       'confirmed false positive and you can document why it is safe.',
     parameters: {
       type: 'object',
@@ -184,11 +186,11 @@ export const HERMES_TOOLS = [
 // =============================================================================
 
 const KNOWN_HASHES = {
-  praxis_audit:             '4d282d29e44fcc01',
-  praxis_scan_mcp:          'f967aea9626ca840',
-  praxis_get_findings:      'c09c9447efd574b3',
-  praxis_suppress_finding:  '3b7339419fe52ac7',
-  praxis_memory_list:       'c71c996716d1805b',
+  praxis_audit:             '4bdb0dafe1efea27',
+  praxis_scan_mcp:          '99c278579ccc7e38',
+  praxis_get_findings:      '8c3b10c970f047ab',
+  praxis_suppress_finding:  '3cedaa6e7ae974ae',
+  praxis_memory_list:       '9d405b87e81c7263',
 };
 
 function toolHash(tool) {

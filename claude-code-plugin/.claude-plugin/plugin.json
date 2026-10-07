@@ -1,8 +1,7 @@
 {
   "name": "praxis",
-  "version": "3.0.0",
-  "description": "Security audit your project with Praxis - 28 agents, 80+ attack classes, deep LLM analysis, CI mode",
-  "author": "",
+  "version": "3.0.1",
+  "description": "Praxis security workflows: 28 local scanners, reviewed fixes, optional LLM analysis, and CI gates. Requires a preinstalled CLI.",
   "homepage": "https://github.com/Ganron007/Praxis",
   "skills": [
     "skills/praxis",

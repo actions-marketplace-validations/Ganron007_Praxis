@@ -12,7 +12,9 @@ For everything else (general CLI usage, scanning, hooks, etc.), see the main
 
 ## 1. Commands
 
-Run these from any directory — they only touch `~/.praxis/` (your home dir).
+Feed-update commands store caches under `~/.praxis/`. Scan commands also read
+the selected project and can update its local Praxis state. Updates contact
+configured remote sources; cached data is not a guarantee of current coverage.
 
 | Command | What it does |
 | --- | --- |
@@ -35,7 +37,7 @@ over no data.
 praxis intel update
 ```
 
-Expected output:
+Illustrative output (versions and counts depend on the fetched feeds):
 
 ```
   Fetching sources...

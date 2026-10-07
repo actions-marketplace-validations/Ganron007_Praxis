@@ -19,6 +19,25 @@
  * Patterns with known prefixes (sk-ant-, ghp_, AKIA...) are already precise enough.
  */
 
+import fs from 'fs';
+
+const documentedExamples = new Map();
+try {
+  const catalog = JSON.parse(fs.readFileSync(new URL('../data/documented-secret-examples.json', import.meta.url), 'utf8'));
+  for (const entry of catalog.examples || []) {
+    if (typeof entry.pattern !== 'string' || typeof entry.value !== 'string') continue;
+    for (const name of [entry.pattern, ...(Array.isArray(entry.aliases) ? entry.aliases : [])]) {
+      if (typeof name !== 'string') continue;
+      if (!documentedExamples.has(name)) documentedExamples.set(name, new Set());
+      documentedExamples.get(name).add(entry.value);
+    }
+  }
+} catch { /* Missing example data must never suppress unknown credentials. */ }
+
+export function isDocumentedSecretExample(patternName, matched) {
+  return documentedExamples.get(patternName)?.has(extractSecretValue(matched)) === true;
+}
+
 // =============================================================================
 // ENTROPY CALCULATION
 // =============================================================================

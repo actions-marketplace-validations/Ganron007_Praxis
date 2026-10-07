@@ -29,6 +29,9 @@ import path from 'path';
 import { execFileSync, execSync } from 'child_process';
 import chalk from 'chalk';
 import * as output from '../utils/output.js';
+import { resolveProjectFile } from '../core/fs.js';
+import { isProtectedFixPath } from '../core/fix-plan.js';
+import writeFileAtomic from 'write-file-atomic';
 
 // Severity rank for filtering
 const SEV_RANK = { critical: 4, high: 3, medium: 2, low: 1 };
@@ -86,7 +89,11 @@ export async function autofixCommand(options = {}) {
     if (!f.deepAnalysis?.fix) return false;
     if ((SEV_RANK[f.severity] ?? 0) < minRank) return false;
     if (!f.file) return false;
-    const absFile = path.resolve(rootPath, f.file);
+    let absFile;
+    try {
+      absFile = resolveProjectFile(rootPath, f.file);
+      if (isProtectedFixPath(path.relative(fs.realpathSync(rootPath), absFile)) || /^~[\\/]/.test(f.file)) return false;
+    } catch { return false; }
     if (NEVER_EDIT.some(p => p.test(absFile.replace(/\\/g, '/')))) return false;
     if (!fs.existsSync(absFile)) return false;
     return true;
@@ -160,11 +167,14 @@ export async function autofixCommand(options = {}) {
   const failed  = [];
 
   for (const f of fixable) {
-    const absFile = path.resolve(rootPath, f.file);
     const fix     = f.deepAnalysis.fix;
 
     try {
-      applyInlineAnnotation(absFile, f.line, fix);
+      const absFile = resolveProjectFile(rootPath, f.file);
+      if (!applyInlineAnnotation(absFile, f.line, fix)) {
+        console.log(chalk.gray(`  Already annotated: ${f.file}:${f.line ?? ''}`));
+        continue;
+      }
       applied.push(f);
       console.log(chalk.green(`  ✔ Annotated: ${f.file}:${f.line ?? ''}`));
     } catch (err) {
@@ -269,16 +279,20 @@ export async function autofixCommand(options = {}) {
  * Returns the count of files successfully annotated.
  * Exported for use by the --agentic audit loop.
  */
-export function applyInlineAnnotations(findings) {
-  const NEVER_EDIT = new Set(['.env', '.env.local', '.env.production', 'secrets.json', '.npmrc', '.netrc']);
-  const fixable = findings.filter(f =>
-    f.fix && f.file && fs.existsSync(f.file) && !NEVER_EDIT.has(path.basename(f.file))
-  );
+export function applyInlineAnnotations(findings, rootPath = process.cwd()) {
+  const neverEdit = new Set(['secrets.json', '.npmrc', '.netrc']);
   let count = 0;
-  for (const f of fixable.slice(0, 10)) {
+  // Insert from the bottom of each file so earlier insertions do not shift
+  // the original line numbers of later findings.
+  const ordered = [...findings].sort((a, b) => String(a.file).localeCompare(String(b.file)) || (b.line || 1) - (a.line || 1));
+  for (const f of ordered) {
+    if (count >= 10) break;
     try {
-      applyInlineAnnotation(f.file, f.line, f.fix);
-      count++;
+      if (!f.fix || !f.file || /^(?:~[\\/])/.test(f.file)) continue;
+      const absFile = resolveProjectFile(rootPath, f.file);
+      const relative = path.relative(fs.realpathSync(rootPath), absFile);
+      if (isProtectedFixPath(relative) || neverEdit.has(path.basename(absFile)) || !fs.statSync(absFile).isFile()) continue;
+      if (applyInlineAnnotation(absFile, f.line, f.fix)) count++;
     } catch { /* skip unwritable */ }
   }
   return count;
@@ -294,11 +308,15 @@ export function applyInlineAnnotation(filePath, lineNum, fix) {
   }
 
   // Already annotated?
-  if (idx > 0 && /praxis-fix/i.test(lines[idx - 1])) return;
+  if (/^\s*(?:\/\/|#)\s*praxis-fix\b/i.test(lines[idx])) return false;
+  for (let previous = idx - 1; previous >= 0 && /^\s*(?:\/\/|#)/.test(lines[previous]); previous--) {
+    if (/praxis-fix/i.test(lines[previous])) return false;
+  }
 
   const indent = lines[idx].match(/^(\s*)/)?.[1] ?? '';
   const isJs   = /\.(js|ts|jsx|tsx|mjs|cjs|java|c|cpp|cs|go|rs|swift|kt)$/.test(filePath);
   const isPy   = /\.py$/.test(filePath);
+  if (!isJs && !isPy) throw new Error('Inline annotations require a supported source-code comment syntax');
 
   // Wrap fix in a structured annotation comment
   const fixLines = fix.split('\n').map(l => l.trim()).filter(Boolean);
@@ -317,7 +335,8 @@ export function applyInlineAnnotation(filePath, lineNum, fix) {
   }
 
   lines.splice(idx, 0, annotation);
-  fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
+  writeFileAtomic.sync(filePath, lines.join('\n'), { encoding: 'utf8' });
+  return true;
 }
 
 function buildPRBody(applied, failed, reportPath) {

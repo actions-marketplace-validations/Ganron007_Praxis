@@ -1,5 +1,11 @@
 # LLM Security Checklist
 
+> These examples are illustrative and require adaptation and tests. Prompt text,
+> keyword filters, and in-memory limits do not enforce authorization or tenant
+> isolation. Apply access controls, tool restrictions, and resource limits in code;
+> test the deployed system against its actual threat model.
+
+
 **Secure your AI-powered features before launch.**
 
 Based on [OWASP LLM Top 10 2025](https://genai.owasp.org/llm-top-10/) and real-world incidents.

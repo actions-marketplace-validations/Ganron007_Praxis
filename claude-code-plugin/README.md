@@ -1,85 +1,56 @@
-# Praxis Plugin for Claude Code
+# Praxis plugin for Claude Code
 
-Security audit your projects directly inside Claude Code. 28 agents, 80+ attack classes, zero setup.
+These skills guide Claude Code through Praxis scans, findings, fixes, hooks,
+and CI configuration. The plugin uses a preinstalled Praxis CLI so the reviewed
+version is explicit and command execution does not silently download a new one.
 
-## Install
+## Requirements and installation
+
+- Node.js 18 or newer and Claude Code with plugin support.
+- Praxis CLI 1.2.4 or newer. Install `praxis-sec` from npm after publication,
+  or use the tarball/source from the [GitHub release](https://github.com/Ganron007/Praxis/releases/tag/v1.2.4).
+- Verify the CLI with `praxis --version` before invoking these skills.
+
+From a checkout of this repository, load the plugin directly:
 
 ```bash
-claude plugin add github:Ganron007/Praxis
+claude --plugin-dir ./claude-code-plugin
 ```
+
+This uses Claude Code's [local plugin loading](https://code.claude.com/docs/en/plugins)
+without requiring a marketplace catalog. The manifest is
+[.claude-plugin/plugin.json](.claude-plugin/plugin.json). Skill names are namespaced
+by the plugin; use `/praxis:praxis`, `/praxis:praxis-scan`, and the corresponding
+names below in the loaded session.
 
 ## Skills
 
-| Command | Description |
-|---------|-------------|
-| `/praxis` | Full security audit — 28 agents, 80+ attack classes, prioritized remediation plan |
-| `/praxis-hooks` | Install real-time hooks — block secrets & dangerous commands on every Write/Bash |
-| `/praxis-scan` | Quick scan for leaked secrets (API keys, passwords, tokens) |
-| `/praxis-score` | Security health score (0-100, A-F grade) |
-| `/praxis-red-team` | Multi-agent red team scan — deep vulnerability analysis |
-| `/praxis-baseline` | Manage security baseline — only report new regressions |
-| `/praxis-fix` | Auto-fix security issues (secrets, TLS, debug mode, XSS, Docker) |
-| `/praxis-deep` | LLM-powered deep taint analysis for critical/high findings |
-| `/praxis-ci` | CI/CD pipeline setup — GitHub Actions, GitLab CI examples |
+| Skill | Purpose |
+| --- | --- |
+| `/praxis` | Full static audit and prioritized findings |
+| `/praxis-scan` | Fast secret/pattern scan |
+| `/praxis-score` | Score summary and its limitations |
+| `/praxis-red-team` | Static adversarial scanner pack |
+| `/praxis-baseline` | Review and manage accepted findings |
+| `/praxis-fix` | Preview deterministic fixes, apply authorized changes, verify |
+| `/praxis-deep` | Optional provider-backed analysis |
+| `/praxis-ci` | Severity/score gates and CI examples |
+| `/praxis-hooks` | Install, inspect, or remove Claude Code hooks |
 
-## How It Works
+## Interpreting results
 
-These skills invoke [praxis](https://www.npmjs.com/package/praxis-sec) via `npx`, so you always get the latest version. No API keys required — Claude Code itself interprets the results, explains findings in plain language, and can directly fix issues in your codebase.
+Full audits preserve stderr and exit status and check `scanComplete` before
+presenting an assessment. Skipped or failed checks must be disclosed. Ordinary
+full scans do not fail solely because findings exist; CI gates do.
 
-## Examples
+The static skills disable Praxis's AI classification. Dependency auditing can
+contact package services; add `--no-deps` when a local-only audit is required.
+Deep analysis explicitly uses a configured provider, and Claude Code itself may
+receive source context when interpreting results. Do not treat these workflows
+as a guarantee that data stays on the local machine.
 
-```
-> /praxis-hooks
-Installs praxis as PreToolUse + PostToolUse hooks in ~/.claude/settings.json.
-After this, every Write/Edit call is scanned for secrets before it hits disk,
-and every Bash call is checked for dangerous patterns like curl|bash.
+Review findings and proposed diffs before modifying code. A baseline accepts
+debt; it does not resolve a vulnerability. A high score and an LLM verdict do
+not prove that a project is safe to ship.
 
-> /praxis
-Runs full audit with all 28 security agents, shows score, findings grouped
-by severity, and offers to fix critical issues in your code.
-
-> /praxis-scan src/
-Scans src/ directory for leaked secrets and offers to move them to
-environment variables.
-
-> /praxis-score
-Quick score check — tells you if your project is safe to ship.
-
-> /praxis-red-team . --agents injection,auth
-Deep dive into injection and auth vulnerabilities with specialized agents.
-
-> /praxis-baseline .
-Accept current findings as baseline. Future scans only show new regressions.
-
-> /praxis-fix . --all
-Auto-fix hardcoded secrets AND common vulnerabilities (TLS bypass, debug
-mode, XSS, Docker :latest, shell injection).
-```
-
-## What Gets Scanned
-
-- Secrets (API keys, passwords, tokens, database URLs)
-- Injection vulnerabilities (SQL, NoSQL, XSS, command injection)
-- Auth bypass (JWT, CSRF, OAuth, IDOR)
-- SSRF (user input in HTTP clients, cloud metadata)
-- Supply chain (typosquatting, dependency confusion, wildcard versions)
-- Supabase RLS (missing Row Level Security, service_role key exposure)
-- Config (Docker, Terraform, Kubernetes, CORS, CSP)
-- LLM security (prompt injection, system prompt leakage)
-- MCP server security (tool poisoning, missing auth)
-- Agentic AI (OWASP Agentic AI Top 10 — agent hijacking, privilege escalation)
-- RAG pipelines (context injection, document poisoning)
-- PII compliance (SSNs, credit cards, emails in source code)
-- CI/CD (pipeline poisoning, unpinned actions)
-- API (missing auth, rate limiting, OpenAPI spec issues)
-- Dependencies (known CVEs in npm, pip, bundler)
-
-## Requirements
-
-- Node.js 18+
-- Claude Code CLI
-
-## Links
-
-- [Praxis on npm](https://www.npmjs.com/package/praxis-sec)
-- [Praxis usage reference](../docs/USAGE.md)
+See the [usage guide](../docs/USAGE.md) and [security reporting policy](../.github/SECURITY.md).

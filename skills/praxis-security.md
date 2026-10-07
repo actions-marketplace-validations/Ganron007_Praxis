@@ -2,17 +2,13 @@
 name: praxis-sec
 version: 8.0.0
 description: Run Praxis security scans from within a Hermes Agent workflow. Detects vulnerabilities in codebases, MCP servers, agent manifests, and Hermes deployments.
-author: Praxis ()
+author: Praxis contributors
 tools:
   - praxis_audit
   - praxis_scan_mcp
   - praxis_get_findings
   - praxis_suppress_finding
   - praxis_memory_list
-permissions:
-  - filesystem: read-only
-  - network: none
-  - shell: none
 tags:
   - security
   - devsecops
@@ -78,18 +74,20 @@ praxis_memory_list({ path: "/path/to/project" })
 
 ## Security constraints
 
-- This skill operates **read-only** on the filesystem by default. It does not modify source files unless explicitly invoked via `praxis_suppress_finding`.
-- Network access is disabled — MCP manifest fetching must be explicitly permitted by the agent operator.
-- This skill never forwards credentials or secrets to external endpoints.
-- All findings are stored locally at `.praxis/last-report.json`.
+- Register the tool definitions from `cli/utils/hermes-tool-registry.js` in the host agent. This document does not itself enforce host permissions.
+- Audits read a project and may write local cache/history state. The default Hermes audit skips dependency auditing and AI classification; disclose those omissions.
+- `deep: true` sends source context to the configured LLM provider. Remote MCP manifests require network access. Configure host permissions accordingly.
+- `praxis_suppress_finding` writes a trailing comment to the matched source line. Invoke it only for an authorized, reviewed suppression; it does not repair the vulnerability.
+- Audit handlers return structured results. To use `praxis_get_findings`, explicitly save a full JSON report as `.praxis/last-report.json`; it is not saved automatically.
+- Require `scanComplete === true` before treating an audit as complete. Never display credential values.
 
 ## Example workflow
 
 ```
 1. Agent receives task: "Audit the codebase before merging PR #42"
 2. Agent calls: praxis_audit({ path: process.cwd(), severity: "high" })
-3. If critical findings: agent reports findings and blocks merge recommendation
+3. Agent checks scan completion and discloses skipped checks; an incomplete audit cannot support a pass
 4. If high findings only: agent calls praxis_get_findings to get details
 5. Agent surfaces remediation suggestions from the findings' `fix` fields
-6. If finding is known-safe: agent calls praxis_suppress_finding to mark it
+6. If an authorized review establishes a false positive: agent calls praxis_suppress_finding to mark it
 ```

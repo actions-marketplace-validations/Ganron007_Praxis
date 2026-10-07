@@ -188,31 +188,37 @@ const DANGEROUS_TOOL_NAMES = [
 // =============================================================================
 
 export async function scanMcpCommand(target, options = {}) {
+  const machineOutput = options.json || options.quiet;
   if (!target) {
+    if (options.quiet) throw new Error('An MCP manifest path or URL is required');
     output.error('Usage: praxis scan-mcp <url|path>');
     output.info('  Analyze an MCP server\'s tool manifest for security issues before connecting.');
     process.exit(1);
   }
 
-  console.log();
-  output.header('Praxis — MCP Server Security Analysis');
-  console.log();
+  if (!machineOutput) {
+    console.log();
+    output.header('Praxis — MCP Server Security Analysis');
+    console.log();
+  }
 
   let manifest, serverName, source;
 
   if (target.startsWith('http://') || target.startsWith('https://')) {
-    console.log(chalk.gray(`  Fetching MCP manifest from: ${target}`));
+    if (!machineOutput) console.log(chalk.gray(`  Fetching MCP manifest from: ${target}`));
     try {
       manifest = await fetchMcpManifest(target);
       serverName = new URL(target).hostname;
       source = target;
     } catch (err) {
+      if (options.quiet) throw err;
       output.error(`Failed to fetch MCP manifest: ${err.message}`);
       process.exit(1);
     }
   } else {
     const filePath = path.resolve(target);
     if (!fs.existsSync(filePath)) {
+      if (options.quiet) throw new Error(`File not found: ${filePath}`);
       output.error(`File not found: ${filePath}`);
       process.exit(1);
     }
@@ -221,26 +227,31 @@ export async function scanMcpCommand(target, options = {}) {
       serverName = path.basename(filePath);
       source = filePath;
     } catch (err) {
+      if (options.quiet) throw err;
       output.error(`Failed to parse manifest: ${err.message}`);
       process.exit(1);
     }
   }
 
   const tools = extractTools(manifest);
-  console.log(chalk.gray(`  Server: ${serverName}`));
-  console.log(chalk.gray(`  Tools found: ${tools.length}`));
-  console.log();
+  if (!machineOutput) {
+    console.log(chalk.gray(`  Server: ${serverName}`));
+    console.log(chalk.gray(`  Tools found: ${tools.length}`));
+    console.log();
+  }
 
   if (tools.length === 0) {
+    if (options.quiet) throw new Error('No tools found in MCP manifest');
     output.warning('No tools found in manifest. Is this a valid MCP tools response?');
     return;
   }
 
   const findings = analyzeManifest(manifest, tools, serverName, source);
+  const report = { server: serverName, source, toolCount: tools.length, findings, summary: getSummary(findings) };
 
   if (options.json) {
-    console.log(JSON.stringify({ server: serverName, source, toolCount: tools.length, findings, summary: getSummary(findings) }, null, 2));
-    return;
+    if (!options.quiet) console.log(JSON.stringify(report, null, 2));
+    return report;
   }
 
   printFindings(findings, serverName, tools.length);

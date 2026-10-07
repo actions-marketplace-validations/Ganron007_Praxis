@@ -30,7 +30,7 @@ import {
   MAX_FILE_SIZE,
   loadGitignorePatterns
 } from '../utils/patterns.js';
-import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
+import { isHighEntropyMatch, getConfidence, isDocumentedSecretExample } from '../utils/entropy.js';
 import fg from '../core/glob.js';
 
 // =============================================================================
@@ -135,6 +135,7 @@ export async function vibeCheckCommand(targetPath = '.', options = {}) {
           pattern.pattern.lastIndex = 0;
           let match;
           while ((match = pattern.pattern.exec(line)) !== null) {
+            if (isDocumentedSecretExample(pattern.name, match[0])) continue;
             if (pattern.requiresEntropyCheck && !isHighEntropyMatch(match[0])) continue;
             secretFindings.push({
               file, line: lineNum + 1, column: match.index + 1,

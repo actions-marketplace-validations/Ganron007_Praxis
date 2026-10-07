@@ -88,7 +88,7 @@ export const PATTERNS = [
   {
     rule: 'API_UPLOAD_NO_TYPE_CHECK',
     title: 'API: File Upload Without Type Validation',
-    regex: /(?<!_)(?:originalname|filename)\s*(?:\)|;)/g,
+    regex: /\b(?:file|upload|uploadedFile|req\.file|request\.file)\.originalname\s*(?:\)|;)/g,
     severity: 'high',
     cwe: 'CWE-434',
     owasp: 'A04:2021',
@@ -99,7 +99,7 @@ export const PATTERNS = [
   {
     rule: 'API_PATH_IN_FILENAME',
     title: 'API: Path Traversal in File Upload',
-    regex: /path\.join\s*\([^)]*(?:originalname|filename|req\.file|req\.body)/g,
+    regex: /path\.join\s*\([^)]*(?:\b(?:req|request)\.(?:files?|body|query|params)\b|\b[\w$]+\.originalname\b)/g,
     severity: 'critical',
     cwe: 'CWE-22',
     owasp: 'A01:2021',

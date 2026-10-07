@@ -27,6 +27,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { execFileSync } from 'child_process';
 import { SECRET_PATTERNS, SKIP_DIRS } from '../utils/patterns.js';
+import { isDocumentedSecretExample } from '../utils/entropy.js';
 
 // Minimum value length to cross-reference (skip short values like "true", "3000")
 const MIN_VALUE_LENGTH = 8;
@@ -138,8 +139,9 @@ export async function envAuditCommand(targetPath = '.', options) {
           const content = fs.readFileSync(pFile, 'utf-8');
           for (const pattern of SECRET_PATTERNS) {
             pattern.pattern.lastIndex = 0;
-            const match = pattern.pattern.exec(content);
-            if (match) {
+            let match;
+            while ((match = pattern.pattern.exec(content)) !== null) {
+              if (isDocumentedSecretExample(pattern.name, match[0])) continue;
               const relPath = path.relative(absolutePath, pFile).replace(/\\/g, '/');
               findings.push({
                 type: 'projects-manifest',

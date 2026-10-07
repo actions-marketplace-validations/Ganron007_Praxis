@@ -2,7 +2,7 @@
   "name": "praxis",
   "displayName": "Praxis — Security Scanner",
   "description": "Real-time security scanning with 28 AI agents. Find secrets, vulnerabilities, and CVEs as you code.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "praxis",
   "license": "MIT",
   "repository": {
@@ -54,7 +54,12 @@
         "praxis.severity": {
           "type": "string",
           "default": "medium",
-          "enum": ["low", "medium", "high", "critical"],
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
           "description": "Minimum severity to show in diagnostics"
         },
         "praxis.showInlineHints": {
@@ -70,7 +75,7 @@
         "praxis.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the praxis executable (e.g. '/usr/local/bin/praxis' or 'C:\\Users\\...\\praxis.js'). If empty, defaults to 'npx praxis-sec'."
+          "description": "Path to the Praxis executable or JavaScript entry point. Empty uses npx --no-install praxis-sec and requires a preinstalled CLI."
         }
       }
     },

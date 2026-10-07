@@ -177,6 +177,7 @@ export class HTMLReporter {
           </div>
         </div>
       </header>
+      ${scoreResult.scanComplete === false ? '<p role="alert" class="sev-badge sev-high">SCAN INCOMPLETE — score reflects only available results. Review scan errors before trusting this report.</p>' : ''}
     `;
   }
 

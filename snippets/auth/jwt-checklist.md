@@ -2,26 +2,26 @@
 
 **Secure your JWT implementation before launch.**
 
-Based on [JWT Best Practices 2025](https://jwt.app/blog/jwt-best-practices/) and OWASP guidelines.
+Based on [RFC 8725: JWT Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725.html). Examples need application-specific key management and claim validation.
 
 ---
 
 ## Critical: Algorithm & Signing
 
-### 1. [ ] Using secure algorithm (not HS256 in production)
+### 1. [ ] Use an explicitly allowed algorithm and appropriate keys
 
 ```typescript
 // BAD: HS256 with weak secret
 jwt.sign(payload, 'my-secret', { algorithm: 'HS256' });
 
-// GOOD: RS256 (asymmetric) for production
+// Asymmetric option: RS256 with appropriate key management
 jwt.sign(payload, privateKey, { algorithm: 'RS256' });
 
-// GOOD: ES256 (elliptic curve) - smaller keys, same security
+// Asymmetric option: ES256 with appropriate key management
 jwt.sign(payload, privateKey, { algorithm: 'ES256' });
 ```
 
-**Why:** HS256 secrets can be brute-forced. RS256/ES256 use public/private key pairs.
+**Why:** Weak HS256 keys permit offline guessing. HS256 can be appropriate with a strong random shared key; asymmetric keys separate signing authority from verification. Pin the expected algorithm and key type.
 
 ### 2. [ ] Algorithm specified in verification (not "auto")
 
@@ -35,8 +35,8 @@ jwt.verify(token, key, { algorithms: ['RS256'] });
 
 ### 3. [ ] Strong secret/key used
 
-For HS256 (if you must use it):
-- [ ] At least 256 bits (32 characters)
+For HS256:
+- [ ] At least 256 bits of random key material (32 bytes; character count is not entropy)
 - [ ] Random, not dictionary words
 - [ ] Stored in environment variable
 
@@ -59,15 +59,15 @@ jwt.sign(payload, key, { expiresIn: '15m' });
 jwt.sign(payload, key, { expiresIn: '30d' }); // Too long!
 ```
 
-**Recommended lifetimes:**
+**Illustrative lifetimes; choose these from the application risk and session requirements:**
 - Access tokens: 15-60 minutes
 - Refresh tokens: 7-30 days
 - Remember me: 30-90 days (with re-auth for sensitive actions)
 
-### 5. [ ] Expiration claim (exp) always set
+### 5. [ ] Expiration claim (exp) is required and validated
 
 ```typescript
-// Always verify expiration
+// Validate expiration, and separately reject tokens missing the required exp claim
 jwt.verify(token, key, {
   algorithms: ['RS256'],
   clockTolerance: 30, // 30 seconds tolerance for clock skew
@@ -132,7 +132,7 @@ res.cookie('token', value, {
 
 ```typescript
 res.cookie('token', value, {
-  sameSite: 'strict', // Prevents CSRF
+  sameSite: 'strict', // Helps reduce CSRF; verify the full request/CSRF design
   // Or 'lax' if you need cross-site GET requests
 });
 ```
@@ -184,10 +184,11 @@ JWTs can't be invalidated by default. Implement one of:
 
 **Option B: Token blacklist/denylist**
 ```typescript
+// Illustrative only; production revocation state must be shared and durable.
 const revokedTokens = new Set();
 
 function verifyToken(token) {
-  const payload = jwt.verify(token, key);
+  const payload = jwt.verify(token, key, { algorithms: ['RS256'] });
   if (revokedTokens.has(payload.jti)) {
     throw new Error('Token revoked');
   }
@@ -261,7 +262,7 @@ const token = jwt.sign({
 
 ## Code Examples
 
-### Complete JWT Service
+### Illustrative JWT Service
 
 ```typescript
 import jwt from 'jsonwebtoken';

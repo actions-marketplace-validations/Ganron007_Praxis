@@ -1,50 +1,24 @@
 ---
 name: praxis-score
-description: Get your project's security health score (0-100, A-F grade). Use when the user wants a quick security check or asks "is my code safe to ship?"
+description: Summarize the Praxis score while explaining coverage and unresolved findings.
 argument-hint: "[path] [--no-deps]"
 ---
 
-# Praxis — Security Score
+# praxis-score
 
-You are checking this project's security health score.
+Use a preinstalled Praxis CLI 1.2.4 or newer; check `praxis --version`.
+Resolve the requested directory and pass arguments literally. `$ARGUMENTS`
+below is a placeholder for user-selected arguments, not shell code to evaluate.
+Keep stdout, stderr, and exit status separate. Never display credential values.
 
-## Step 1: Run the score command
-
-```bash
-npx praxis-sec@latest score $ARGUMENTS 2>&1
-```
-
-If `$ARGUMENTS` is empty, default to `.`:
+Use a full report so completion and findings can be assessed alongside the score:
 
 ```bash
-npx praxis-sec@latest score . 2>&1
+praxis scan full . --json --no-ai
 ```
 
-If the user mentions skipping dependencies, add `--no-deps`.
-
-The command outputs styled terminal text (not JSON). Parse the output for the score, grade, and category breakdown.
-
-## Step 2: Present the results
-
-Extract and present:
-
-1. **Score and Grade**: The 0-100 score and A-F letter grade
-2. **Category Breakdown**: Show deductions per category (Secrets, Code Vulnerabilities, Dependencies)
-3. **Grade Meaning**:
-   - A (90-100): Ship it! Your code looks secure.
-   - B (75-89): Minor issues to review, but generally safe.
-   - C (60-74): Fix issues before shipping to production.
-   - D (40-59): Significant security risks present.
-   - F (0-39): Not safe to ship. Critical issues found.
-
-## Step 3: Recommendations
-
-Based on the score:
-
-- **A or B (75+)**: Congratulate the user. Suggest running `npx praxis-sec guard` to install a pre-push git hook that maintains the score. Mention they can run `/praxis` for a detailed breakdown anytime.
-
-- **C (60-74)**: Recommend running `/praxis` for a full audit to see exactly what needs fixing. Mention the most likely problem areas based on the category breakdown.
-
-- **D or F (below 60)**: Strongly recommend running `/praxis` immediately. Offer to start the full audit right now. Emphasize that critical findings should be fixed before any deployment.
-
-- For any score, mention `/praxis-baseline` to track progress over time and `/praxis-fix` for automated remediation.
+Honor the requested directory and dependency options. Require
+`scanComplete === true` and report skipped checks. Present the score and grade
+with category deductions and the highest severity findings. An A/B grade is not
+proof of security; a low score is not itself proof of exploitability. Describe
+what was detected, review evidence, and suggest the relevant fixes and CI gate.

@@ -130,6 +130,7 @@ export async function agentFixCommand(targetPath = '.', options = {}) {
   let scanResult;
   try {
     scanResult = await auditCommand(root, { _agenticInner: true, deep: false, deps: false, noAi: true });
+    if (!scanResult || scanResult.scanComplete !== true) throw new Error('Initial scan incomplete; refusing to generate fixes');
   } catch (err) {
     scanSpinner.fail('Scan failed');
     output.error(err.message);
@@ -734,7 +735,7 @@ async function rescanForFile(root, filePath, options) {
     if (!Array.isArray(report.findings)) throw new Error('Sandbox re-scan produced no finding list');
     return report;
   }
-  return auditCommand(root, { _agenticInner: true, deep: false, deps: false, noAi: true });
+  return auditCommand(root, { _agenticInner: true, json: true, deep: false, deps: false, noAi: true });
 }
 
 export async function verifyFile(root, filePath, originalFindings, options = {}) {
@@ -799,6 +800,7 @@ export async function verifyFile(root, filePath, originalFindings, options = {})
 
     // Tier 3 — re-scan: original findings must be gone from the fixed file
     const result = await rescanForFile(root, filePath, options);
+    if (!result || result.scanComplete !== true) throw new Error('Verification scan incomplete; findings cannot be treated as resolved');
     const remaining = (result.findings ?? []).filter(f => {
       const fPath = path.resolve(root, f.file);
       const targetPath = path.resolve(root, filePath);

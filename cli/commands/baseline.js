@@ -19,7 +19,7 @@ import ora from 'ora';
 import { displayPath } from '../core/paths.js';
 import { buildOrchestrator } from '../agents/index.js';
 import { SECRET_PATTERNS, SKIP_DIRS, SKIP_EXTENSIONS, SKIP_FILENAMES, MAX_FILE_SIZE } from '../utils/patterns.js';
-import { isHighEntropyMatch } from '../utils/entropy.js';
+import { isHighEntropyMatch, isDocumentedSecretExample } from '../utils/entropy.js';
 import fg from '../core/glob.js';
 
 const BASELINE_FILE = '.praxis/baseline.json';
@@ -61,6 +61,7 @@ async function quickScan(rootPath) {
           p.pattern.lastIndex = 0;
           let m;
           while ((m = p.pattern.exec(lines[i])) !== null) {
+            if (isDocumentedSecretExample(p.name, m[0])) continue;
             if (p.requiresEntropyCheck && !isHighEntropyMatch(m[0])) continue;
             findings.push({ file, line: i + 1, rule: p.name, matched: m[0], severity: p.severity });
           }

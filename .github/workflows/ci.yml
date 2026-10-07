@@ -38,13 +38,13 @@ jobs:
       # The scan is written outside the workspace so no artifact is left behind.
       - name: Dogfood — self-scan, no criticals in our own source
         run: |
-          node cli/bin/praxis.js scan . --json --no-deps --timeout 30000 > "$RUNNER_TEMP/self-scan.json"
+          node cli/bin/praxis.js scan . --json --no-deps --no-ai --timeout 30000 > "$RUNNER_TEMP/self-scan.json"
           node -e "
             const j = require(process.env.RUNNER_TEMP + '/self-scan.json');
             const crit = (j.findings || []).filter(f => f.severity === 'critical');
             for (const f of crit) console.error('  ' + f.severity + '  ' + f.rule + '  ' + f.file + ':' + f.line);
             console.log('self-scan: ' + j.totalFindings + ' findings, ' + crit.length + ' critical');
-            process.exit(crit.length ? 1 : 0);
+            process.exit(j.scanComplete !== true || crit.length ? 1 : 0);
           "
 
       - name: Verify CLI help surface
@@ -96,8 +96,9 @@ jobs:
       - name: Typecheck VS Code extension
         working-directory: vscode-extension
         run: |
-          npm install --no-audit --no-fund --loglevel=error
-          npx tsc -p ./ --noEmit
+          npm ci --no-audit --no-fund --loglevel=error
+          npm run compile
+          node --test tests/cli-runner.test.cjs
 
       - name: Smoke-test Marketplace action and composite outputs
         id: marketplace

@@ -24,6 +24,7 @@
 
 import fs from 'fs';
 import { BaseAgent, createFinding, ruleTableLineMask } from './base-agent.js';
+import { isDocumentedSecretExample } from '../utils/entropy.js';
 
 // =============================================================================
 // PATTERNS & REGEXES
@@ -304,6 +305,7 @@ export class AgentTelemetryAgent extends BaseAgent {
             pattern.regex.lastIndex = 0;
             let match;
             while ((match = pattern.regex.exec(lines[i])) !== null) {
+              if (isDocumentedSecretExample(pattern.rule, match[0])) continue;
               // Skip placeholder credential values (docs/examples) for the
               // generic secret-kv rule only.
               if (pattern.rule === 'AGENT_LOG_SECRET_KV' && PLACEHOLDER_VALUE.test(match[1] || '')) break;

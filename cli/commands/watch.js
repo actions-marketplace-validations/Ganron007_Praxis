@@ -16,7 +16,7 @@ import chalk from 'chalk';
 import { displayPath } from '../core/paths.js';
 import { execFileSync } from 'child_process';
 import { SKIP_DIRS, SKIP_EXTENSIONS, SKIP_FILENAMES, SECRET_PATTERNS, SECURITY_PATTERNS } from '../utils/patterns.js';
-import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
+import { isHighEntropyMatch, getConfidence, isDocumentedSecretExample } from '../utils/entropy.js';
 import * as output from '../utils/output.js';
 import { ScoringEngine } from '../agents/scoring-engine.js';
 
@@ -175,6 +175,7 @@ function scanFile(filePath, patterns) {
         pattern.pattern.lastIndex = 0;
         let match;
         while ((match = pattern.pattern.exec(line)) !== null) {
+          if (isDocumentedSecretExample(pattern.name, match[0])) continue;
           if (pattern.requiresEntropyCheck && !isHighEntropyMatch(match[0])) continue;
           findings.push({
             line: i + 1,

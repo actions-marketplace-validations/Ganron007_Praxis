@@ -1,65 +1,30 @@
 ---
 name: praxis-baseline
-description: Manage your security baseline — accept current findings as known debt, then only report new regressions on future scans. Use when the user wants to adopt security scanning incrementally or suppress existing findings.
+description: Review and manage accepted findings without presenting suppression as remediation.
 argument-hint: "[path] [--diff] [--clear]"
 ---
 
-# Praxis — Baseline Management
+# praxis-baseline
 
-You are helping the user manage their security baseline. A baseline lets teams "accept" current findings as known technical debt and only see new regressions on future scans.
+Use a preinstalled Praxis CLI 1.2.4 or newer; check `praxis --version`.
+Resolve the requested directory and pass arguments literally. `$ARGUMENTS`
+below is a placeholder for user-selected arguments, not shell code to evaluate.
+Keep stdout, stderr, and exit status separate. Never display credential values.
 
-## Understand the request
-
-- **No flags or just a path** → Create/update the baseline
-- **`--diff`** → Show what changed since the baseline was created
-- **`--clear`** → Remove the baseline
-
-## Step 1: Run the baseline command
+Run the requested baseline operation on the selected directory:
 
 ```bash
-npx praxis-sec@latest baseline $ARGUMENTS 2>&1
+praxis project baseline .
+praxis project baseline . --diff
+praxis project baseline . --clear
 ```
 
-If `$ARGUMENTS` is empty, default to `.`:
+Create/update only findings the user authorized accepting. Report what was
+accepted and why. Review the resulting `.praxis/baseline.json` before selectively
+versioning it; it may include source-derived fingerprints. Diff mode reports
+new/resolved findings, and clear removes the baseline.
 
-```bash
-npx praxis-sec@latest baseline . 2>&1
-```
-
-For diff mode:
-```bash
-npx praxis-sec@latest baseline . --diff 2>&1
-```
-
-For clearing:
-```bash
-npx praxis-sec@latest baseline --clear 2>&1
-```
-
-## Step 2: Explain the result
-
-### If creating a baseline:
-1. Report how many findings were baselined
-2. Explain that `.praxis/baseline.json` was created
-3. Tell the user they can now run `npx praxis-sec audit . --baseline` (or `/praxis --baseline`) to only see new findings
-4. Recommend adding `.praxis/baseline.json` to version control so the whole team shares the same baseline
-
-### If showing diff:
-1. Report new findings (not in baseline) — these are regressions
-2. Report resolved findings (in baseline but no longer detected) — these are improvements
-3. If no changes, confirm the codebase matches the baseline
-
-### If clearing:
-Confirm the baseline was removed. Future scans will show all findings again.
-
-## Step 3: Suggest workflow
-
-After creating a baseline, suggest this workflow:
-- **CI pipeline**: Add `npx praxis-sec audit . --baseline --json` to fail builds only on new findings
-- **Periodic review**: Run `/praxis-baseline --diff` to track progress on reducing technical debt
-- **After fixing**: Run `/praxis-baseline .` to update the baseline
-
-## Important Notes
-
-- The baseline uses content-based fingerprints (`rule:path:snippet`), not line numbers — so the baseline survives code reformatting and line shifts
-- Creating a baseline does NOT mean the findings are safe — it means the team acknowledges them and will address them over time
+For a gate use `praxis scan ci . --baseline --fail-on high`. A normal full scan
+does not fail merely because new findings exist. Accepted debt still needs review,
+and incomplete scans or an Action's `always-fail-on` floor cannot be bypassed by
+a baseline. Do not automatically re-baseline unresolved issues after a failed fix.

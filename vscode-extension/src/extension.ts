@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as path from 'path';
-
-const execAsync = promisify(exec);
+import { runCli } from './cli-runner';
+import { escapeHtml, reportSeverity } from './report-utils';
 
 interface Finding {
   file: string;
@@ -93,10 +91,8 @@ async function scanWorkspace() {
     // `scan`, not `audit`: `praxis audit` is an alias for `agents audit` and
     // returns { findings, summary } with no grade, score, or totalFindings, so
     // the status bar rendered "Praxis: undefined (undefined/100)".
-    const { stdout } = await execAsync(
-      getCliCommand(config, 'scan', `"${workspacePath}" --json ${flags.join(' ')}`.trim()),
-      { timeout: 120_000, maxBuffer: 10 * 1024 * 1024, cwd: workspacePath }
-    );
+    const { stdout } = await runCli(config.get<string>('cliPath'),
+      ['scan', workspacePath, '--json', ...flags], workspacePath, 120_000, 10 * 1024 * 1024);
 
     const report: ScanReport = JSON.parse(stdout);
     lastReport = report;
@@ -136,10 +132,11 @@ async function scanFile(uri: vscode.Uri) {
 
   try {
     const config = vscode.workspace.getConfiguration('praxis');
-    const { stdout } = await execAsync(
-      getCliCommand(config, 'scan', `"${filePath}" --json`),
-      { timeout: 30_000, maxBuffer: 5 * 1024 * 1024, cwd: workspacePath }
-    );
+    const flags = ['--json', '--no-deps', '--no-ai'];
+    // Full scans require a directory. Scan the workspace and select this file's
+    // findings; passing a file as the root previously returned a false clean scan.
+    const { stdout } = await runCli(config.get<string>('cliPath'),
+      ['scan', workspacePath, ...flags], workspacePath, 120_000, 5 * 1024 * 1024);
 
     // Parse findings for this file.
     // `scan --json` writes pretty-printed JSON, so the payload spans many lines.
@@ -226,15 +223,15 @@ function showReport() {
 
   const cats = Object.entries(lastReport.categories || {})
     .filter(([, v]) => v.findingCount > 0)
-    .map(([k, v]) => `<tr><td>${v.label}</td><td>${v.findingCount}</td></tr>`)
+    .map(([, v]) => `<tr><td>${escapeHtml(v.label)}</td><td>${escapeHtml(v.findingCount)}</td></tr>`)
     .join('');
 
   const findings = lastReport.findings
-    .map(f => `<tr><td><span class="sev sev-${f.severity}">${f.severity}</span></td><td>${f.title}</td><td><code>${f.file}:${f.line || ''}</code></td><td>${f.fix || ''}</td></tr>`)
+    .map(f => `<tr><td><span class="sev sev-${reportSeverity(f.severity)}">${escapeHtml(f.severity)}</span></td><td>${escapeHtml(f.title)}</td><td><code>${escapeHtml(f.file)}:${escapeHtml(f.line || '')}</code></td><td>${escapeHtml(f.fix)}</td></tr>`)
     .join('');
 
   panel.webview.html = `<!DOCTYPE html>
-<html><head><style>
+<html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 20px; }
   h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 24px; }
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -248,8 +245,8 @@ function showReport() {
   .score { font-size: 36px; font-weight: 800; font-family: monospace; }
 </style></head><body>
   <h1>Praxis Security Report</h1>
-  <p class="score">${lastReport.grade} — ${lastReport.score}/100</p>
-  <p>${lastReport.totalFindings} findings</p>
+  <p class="score">${escapeHtml(lastReport.grade)} — ${escapeHtml(lastReport.score)}/100</p>
+  <p>${escapeHtml(lastReport.totalFindings)} findings</p>
   ${cats ? `<h2>Categories</h2><table><tr><th>Category</th><th>Findings</th></tr>${cats}</table>` : ''}
   ${findings ? `<h2>Findings</h2><table><tr><th>Severity</th><th>Title</th><th>File</th><th>Fix</th></tr>${findings}</table>` : '<p>No findings — your code looks clean!</p>'}
 </body></html>`;
@@ -288,15 +285,4 @@ class PraxisCodeActionProvider implements vscode.CodeActionProvider {
 export function deactivate() {
   diagnosticCollection.dispose();
   statusBarItem.dispose();
-}
-
-function getCliCommand(config: vscode.WorkspaceConfiguration, subcommand: string, args: string): string {
-  const cliPath = config.get<string>('cliPath');
-  if (cliPath && cliPath.trim().length > 0) {
-    if (cliPath.endsWith('.js')) {
-      return `node "${cliPath}" ${subcommand} ${args}`;
-    }
-    return `"${cliPath}" ${subcommand} ${args}`;
-  }
-  return `npx praxis-sec ${subcommand} ${args}`;
 }

@@ -21,6 +21,7 @@ import fs from 'fs';
 import path from 'path';
 import { displayPath } from '../core/paths.js';
 import { renderFindingsSARIF } from '../core/output/sarif.js';
+import { validateDir } from '../core/fs.js';
 import { execFileSync } from 'child_process';
 import { buildOrchestrator } from '../agents/index.js';
 import { ScoringEngine } from '../agents/scoring-engine.js';
@@ -35,7 +36,7 @@ import {
   MAX_FILE_SIZE,
   loadGitignorePatterns
 } from '../utils/patterns.js';
-import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
+import { isHighEntropyMatch, getConfidence, isDocumentedSecretExample } from '../utils/entropy.js';
 import { ThreatIntel } from '../utils/threat-intel.js';
 import * as intelOrchestrator from '../utils/intel/index.js';
 import fg from '../core/glob.js';
@@ -45,7 +46,7 @@ import fg from '../core/glob.js';
 // =============================================================================
 
 export async function ciCommand(targetPath = '.', options = {}) {
-  const absolutePath = path.resolve(targetPath);
+  const absolutePath = validateDir(targetPath, { exitOnMissing: false });
   const threshold = options.threshold ?? 75;
   const failOn = options.failOn || null;
   const alwaysFailOn = options.alwaysFailOn || null;
@@ -57,8 +58,8 @@ export async function ciCommand(targetPath = '.', options = {}) {
     process.exit(2);
   }
 
-  if (!fs.existsSync(absolutePath)) {
-    console.error(`[praxis] Path does not exist: ${absolutePath}`);
+  if (!absolutePath) {
+    console.error('[praxis] CI scans require an existing directory.');
     process.exit(1);
   }
 
@@ -88,6 +89,8 @@ export async function ciCommand(targetPath = '.', options = {}) {
           pattern.pattern.lastIndex = 0;
           let match;
           while ((match = pattern.pattern.exec(line)) !== null) {
+            if (isDocumentedSecretExample(pattern.name, match[0])) continue;
+
             if (pattern.requiresEntropyCheck && !isHighEntropyMatch(match[0])) continue;
             secretFindings.push({
               file, line: lineNum + 1, column: match.index + 1,

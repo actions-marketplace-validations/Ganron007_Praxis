@@ -1,71 +1,28 @@
 ---
 name: praxis-red-team
-description: Run a multi-agent red team scan — 28 specialized security agents scan for 80+ attack classes including injection, auth bypass, SSRF, supply chain, Supabase RLS, MCP security, agentic AI, RAG poisoning, PII compliance, model-file risk, prompt injection, and more. Use when the user wants a deep security analysis beyond just secrets.
+description: Run the static adversarial scanner pack and review findings and agent coverage.
 argument-hint: "[path] [--agents <list>]"
 ---
 
-# Praxis — Red Team Scan
+# praxis-red-team
 
-You are running a multi-agent red team scan using Praxis's 28 security agents.
+Use a preinstalled Praxis CLI 1.2.4 or newer; check `praxis --version`.
+Resolve the requested directory and pass arguments literally. `$ARGUMENTS`
+below is a placeholder for user-selected arguments, not shell code to evaluate.
+Keep stdout, stderr, and exit status separate. Never display credential values.
 
-## Step 1: Run the red team scan
-
-```bash
-npx praxis-sec@latest red-team $ARGUMENTS --json --no-ai 2>/dev/null
-```
-
-If `$ARGUMENTS` is empty, default to `.`:
+For a local codebase use the static command:
 
 ```bash
-npx praxis-sec@latest red-team . --json --no-ai 2>/dev/null
+praxis scan redteam . --json --no-ai
+praxis scan redteam . --agents injection,auth,ssrf --json --no-ai
 ```
 
-If the user wants specific agents only, use the `--agents` flag:
+Replace the directory and agent selection with the user's request. Preserve
+agent failure/skipped information and disclose excluded checks. Do not label
+failed or unexecuted agents clean. Execution time depends on the project.
 
-```bash
-npx praxis-sec@latest red-team . --agents injection,auth,ssrf --json --no-ai 2>/dev/null
-```
-
-Available agents: `injection`, `auth`, `ssrf`, `supply-chain`, `config`, `llm`, `mobile`, `git-history`, `cicd`, `api`, `supabase-rls`
-
-## Step 2: Parse and present results
-
-The JSON output contains findings from each agent. Present results grouped by agent:
-
-### For each agent that found issues:
-1. **Agent name and category** (e.g., "InjectionTester — Code Vulnerabilities")
-2. **Finding count** by severity
-3. **Top findings** — list critical and high severity findings with:
-   - File and line number
-   - Rule name and description
-   - Code context (if available, show the flagged line with surrounding lines)
-   - Suggested fix
-   - Confidence level
-
-### Agent summary table
-Show a table: Agent | Findings | Critical | High | Medium
-
-### Agents with zero findings
-List them briefly as clean — this is useful context.
-
-## Step 3: Deep dive and remediation
-
-For the most critical findings:
-1. Read the actual source file for full context
-2. Explain the vulnerability in plain language — what could an attacker do?
-3. Offer to fix it with a concrete code change
-4. After fixing, offer to re-run just that agent to verify: `npx praxis-sec@latest red-team . --agents <agent>`
-
-## Step 4: Recommendations
-
-Based on the results, suggest:
-- Which agents to focus on (highest finding count or most critical findings)
-- Whether to create a baseline (`/praxis-baseline`) for the current state
-- Framework-specific hardening tips based on detected stack (from recon agent)
-
-## Important Notes
-
-- The 28 built-in agents are: InjectionTester, AuthBypassAgent, SSRFProber, SupplyChainAudit, ConfigAuditor, SupabaseRLSAgent, LLMRedTeam, MobileScanner, GitHistoryScanner, CICDScanner, APIFuzzer, ExceptionHandlerAgent, VibeCodingAgent, PIIComplianceAgent, MCPSecurityAgent, AgenticSecurityAgent, RAGSecurityAgent, MemoryPoisoningAgent, AgentConfigScanner, ManagedAgentScanner, HermesSecurityAgent, AgentAttestationAgent, AgenticSupplyChainAgent, ModelFileScanner, PromptInjectionProber, AgentTelemetryAgent, EndpointAgentAbuseAgent, AiInfraInventoryAgent (ReconAgent profiles the stack; ScoringEngine grades the result)
-- Agents run in parallel — the scan should complete in under 60 seconds for most projects
-- Low-confidence findings in test files or documentation are likely false positives
-- Never display actual secret values
+Present critical/high findings with file, line, rule, evidence, confidence and
+suggested remediation. Review source before making authorized changes and
+re-run the selected checks afterward. `praxis redteam <endpoint>` is a separate
+live probe command requiring an authorized target; it is not this static skill.

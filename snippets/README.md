@@ -1,5 +1,11 @@
 # Security Snippets
 
+> These examples are illustrative and require adaptation and tests. Prompt text,
+> keyword filters, and in-memory limits do not enforce authorization or tenant
+> isolation. Apply access controls, tool restrictions, and resource limits in code;
+> test the deployed system against its actual threat model.
+
+
 **Copy-paste code blocks for common security patterns.**
 
 This folder contains drop-in code snippets for securing your application. Each snippet is heavily commented to explain *why* it works.

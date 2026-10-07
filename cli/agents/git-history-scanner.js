@@ -10,8 +10,10 @@
 
 import { execSync, execFileSync } from 'child_process';
 import path from 'path';
+import { createHash } from 'crypto';
 import { BaseAgent, createFinding } from './base-agent.js';
 import { SECRET_PATTERNS } from '../utils/patterns.js';
+import { isDocumentedSecretExample } from '../utils/entropy.js';
 
 // Compile a fast combined regex from all secret patterns
 const FAST_SECRET_PATTERNS = SECRET_PATTERNS.map(p => ({
@@ -28,6 +30,7 @@ export class GitHistoryScanner extends BaseAgent {
   async analyze(context) {
     const { rootPath, options } = context;
     const findings = [];
+    const seen = new Set();
 
     // Check if this is a git repository
     if (!this.isGitRepo(rootPath)) return [];
@@ -50,9 +53,8 @@ export class GitHistoryScanner extends BaseAgent {
           maxBuffer: 50 * 1024 * 1024, // 50MB buffer
           timeout: 60000, // 60s timeout
         });
-      } catch {
-        // git log failed — might be a shallow clone or no history
-        return [];
+      } catch (err) {
+        throw new Error(`Git history scan failed: ${err.message}`);
       }
 
       if (!diffOutput) return [];
@@ -88,8 +90,12 @@ export class GitHistoryScanner extends BaseAgent {
         // Check against all secret patterns
         for (const p of FAST_SECRET_PATTERNS) {
           p.pattern.lastIndex = 0;
-          const match = p.pattern.exec(addedLine);
-          if (match) {
+          let match;
+          while ((match = p.pattern.exec(addedLine)) !== null) {
+            if (isDocumentedSecretExample(p.name, match[0])) continue;
+            const key = `${p.name}:${createHash('sha256').update(match[0]).digest('hex')}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
             // Check if this secret still exists in current working tree
             const stillExists = this.existsInWorkingTree(rootPath, match[0]);
 
@@ -113,18 +119,11 @@ export class GitHistoryScanner extends BaseAgent {
         }
       }
 
-      // Deduplicate by matched value (same secret in multiple commits)
-      const seen = new Set();
-      return findings.filter(f => {
-        const key = `${f.matched}:${f.title}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      return findings;
 
     } catch (err) {
-      // Don't fail the entire scan if git history scan fails
-      return [];
+      // Let the orchestrator mark this scanner incomplete instead of clean.
+      throw new Error(`GitHistoryScanner incomplete: ${err.message}`, { cause: err });
     }
   }
 

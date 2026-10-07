@@ -1,9 +1,10 @@
 /**
  * Scanner file discovery boundary. Target-controlled patterns are bounded before
- * fast-glob/braces parse them (GHSA-vfj7-8cjw-p6xm has no upstream patch yet).
+ * the glob parser sees them, including pathological ignore patterns.
  * Directory symlinks must not turn a project scan into a scan of the host.
  */
-import fastGlob from 'fast-glob';
+import { glob as discover, globSync } from 'tinyglobby';
+import { validateDir } from './fs.js';
 
 const MAX_PATTERNS = 4096;
 const MAX_LENGTH = 8192;
@@ -42,15 +43,16 @@ export function validateGlobPatterns(patterns) {
 }
 
 function safeOptions(patterns, options) {
+  if (options.cwd && !validateDir(options.cwd, { exitOnMissing: false })) throw new Error('Scan root must be an existing directory');
   validateGlobPatterns(patterns);
   if (options.ignore) validateGlobPatterns(options.ignore);
-  return { ...options, followSymbolicLinks: false };
+  return { ...options, expandDirectories: false, followSymbolicLinks: false };
 }
 
 function glob(patterns, options = {}) {
-  return fastGlob(patterns, safeOptions(patterns, options));
+  return discover(patterns, safeOptions(patterns, options));
 }
 
-glob.sync = (patterns, options = {}) => fastGlob.sync(patterns, safeOptions(patterns, options));
+glob.sync = (patterns, options = {}) => globSync(patterns, safeOptions(patterns, options));
 
 export default glob;

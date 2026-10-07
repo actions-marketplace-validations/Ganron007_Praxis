@@ -35,11 +35,12 @@ import {
   MAX_FILE_SIZE,
   loadGitignorePatterns
 } from '../utils/patterns.js';
-import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
+import { isHighEntropyMatch, getConfidence, isDocumentedSecretExample } from '../utils/entropy.js';
 import * as output from '../utils/output.js';
 import { CacheManager } from '../utils/cache-manager.js';
 import { isGitUrl, cloneGitRepo } from '../core/git-clone.js';
 import { displayPath } from '../core/paths.js';
+import { validateDir } from '../core/fs.js';
 
 // =============================================================================
 // CUSTOM PATTERNS (.praxis.json)
@@ -114,12 +115,12 @@ export async function scanCommand(targetPath = '.', options = {}) {
     }
   };
 
-  const absolutePath = path.resolve(effectivePath);
+  const absolutePath = validateDir(effectivePath, { exitOnMissing: false });
 
   // Validate path exists
-  if (!fs.existsSync(absolutePath)) {
+  if (!absolutePath) {
     cleanup();
-    output.error(`Path does not exist: ${absolutePath}`);
+    console.error('Secret scans require an existing directory.');
     process.exit(1);
   }
 
@@ -377,6 +378,8 @@ async function scanFile(filePath, patterns = SECRET_PATTERNS) {
         let match;
         while ((match = pattern.pattern.exec(line)) !== null) {
           // For generic patterns, apply entropy check to filter placeholders
+          if (isDocumentedSecretExample(pattern.name, match[0])) continue;
+
           if (pattern.requiresEntropyCheck && !isHighEntropyMatch(match[0])) {
             continue;
           }

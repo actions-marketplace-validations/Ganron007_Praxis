@@ -2,42 +2,40 @@
 
 **Complete this checklist before launching your Supabase-powered app.**
 
-Based on [CVE-2025-48757](https://byteiota.com/supabase-security-flaw-170-apps-exposed-by-missing-rls/) and common pentesting findings.
+Follow [Supabase RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security). Test allow and deny behavior for each operation and role; these examples are not proof of access isolation.
 
 ---
 
 ## Critical: Row Level Security (RLS)
 
-### 1. [ ] RLS is ENABLED on ALL tables
+### 1. [ ] RLS is enabled on tables exposed to application users
 
 ```sql
 -- Check which tables DON'T have RLS
-SELECT schemaname, tablename
-FROM pg_tables
-WHERE schemaname = 'public'
-AND tablename NOT IN (
-  SELECT tablename::text FROM pg_class
-  WHERE relrowsecurity = true
-);
+SELECT n.nspname AS schemaname, c.relname AS tablename
+FROM pg_class AS c
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relkind IN ('r', 'p')
+  AND NOT c.relrowsecurity;
 ```
 
-**If any tables appear, enable RLS immediately:**
+**Review exposed tables and enable RLS with tested policies and grants:**
 ```sql
 ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;
 ```
 
-### 2. [ ] Every table has at least one policy
+### 2. [ ] Exposed tables have the policies needed for intended operations
 
 ```sql
--- Tables with RLS enabled but NO policies (locked to everyone!)
-SELECT tablename FROM pg_tables
-WHERE schemaname = 'public'
-AND tablename IN (
-  SELECT tablename::text FROM pg_class WHERE relrowsecurity = true
-)
-AND tablename NOT IN (
-  SELECT tablename FROM pg_policies
-);
+-- RLS tables with no policies: ordinary roles are denied, but bypass roles differ.
+SELECT n.nspname AS schemaname, c.relname AS tablename
+FROM pg_class AS c
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relkind IN ('r', 'p')
+  AND c.relrowsecurity
+  AND NOT EXISTS (SELECT 1 FROM pg_policy AS p WHERE p.polrelid = c.oid);
 ```
 
 ### 3. [ ] Policies use `auth.uid()` not hardcoded values
@@ -97,7 +95,7 @@ grep -r "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" ./src
 The `anon` key is designed to be public, but only if RLS is properly configured.
 
 ```typescript
-// Frontend: Use anon key (safe if RLS is set up)
+// Frontend: use the appropriate public key with tested RLS policies and grants
 const supabase = createClient(url, anonKey);
 
 // Server: Use service_role key (for admin operations)

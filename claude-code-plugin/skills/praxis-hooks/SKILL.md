@@ -12,6 +12,11 @@ You are installing praxis as real-time security hooks into Claude Code. Once ins
 - **Block** `Bash` calls matching dangerous patterns (curl piped to shell, credential exfiltration)
 - **Scan** every file after it is written and inject advisory findings directly into this conversation
 
+Use a preinstalled Praxis CLI 1.2.4 or newer; check `praxis --version`.
+Resolve the requested directory and pass arguments literally. `$ARGUMENTS`
+below is a placeholder for user-selected arguments, not shell code to evaluate.
+Keep stdout, stderr, and exit status separate. Never display credential values.
+
 ## Step 1: Determine the action
 
 If `$ARGUMENTS` is `remove`: run the remove command below.
@@ -22,17 +27,17 @@ Otherwise (default or `install`): run the install command.
 
 **Install (default):**
 ```bash
-npx praxis-sec@latest hooks install
+praxis hooks install
 ```
 
 **Remove:**
 ```bash
-npx praxis-sec@latest hooks remove
+praxis hooks remove
 ```
 
 **Status check:**
 ```bash
-npx praxis-sec@latest hooks status
+praxis hooks status
 ```
 
 ## Step 3: Report the result
@@ -42,7 +47,7 @@ npx praxis-sec@latest hooks status
 - Explain what each hook does:
   - **PreToolUse** (on Write / Edit / MultiEdit / Bash): blocks critical secrets and dangerous commands in real time
   - **PostToolUse** (on Write / Edit / MultiEdit): scans the written file and reports findings in context
-- Tell the user that **no restart is needed** — hooks take effect immediately
+- Tell the user that hooks were written; check their status and the behavior of your installed Claude Code version
 
 **On remove success:**
 - Confirm the hooks were removed from `~/.claude/settings.json`
@@ -58,6 +63,6 @@ npx praxis-sec@latest hooks status
 ## Notes
 
 - Hooks are stored in `~/.claude/settings.json` (global) so they apply to all Claude Code projects
-- The hooks are non-invasive: they only read file content and run patterns locally — no data is sent externally
+- Installed hook checks run local patterns; installation modifies global Claude Code settings. Review the installed commands and CLI path
 - PostToolUse never blocks, it only informs
 - To see what was installed: `cat ~/.claude/settings.json`

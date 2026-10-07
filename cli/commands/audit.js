@@ -18,6 +18,7 @@ import { renderFindingsSARIF } from '../core/output/sarif.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import { displayPath } from '../core/paths.js';
+import { validateDir } from '../core/fs.js';
 import fg from '../core/glob.js';
 import { buildOrchestrator, buildOrchestratorAsync } from '../agents/index.js';
 import { LegalRiskAgent } from '../agents/legal-risk-agent.js';
@@ -36,7 +37,7 @@ import {
   MAX_FILE_SIZE,
   loadGitignorePatterns
 } from '../utils/patterns.js';
-import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
+import { isHighEntropyMatch, getConfidence, isDocumentedSecretExample } from '../utils/entropy.js';
 import { printBanner } from '../utils/output.js';
 import { CacheManager } from '../utils/cache-manager.js';
 import { filterBaseline } from './baseline.js';
@@ -112,10 +113,10 @@ export async function auditCommand(targetPath = '.', options = {}) {
   }
 
   try {
-    const absolutePath = path.resolve(effectivePath);
+    const absolutePath = validateDir(effectivePath, { exitOnMissing: false });
 
-    if (!fs.existsSync(absolutePath)) {
-      console.error(chalk.red(`  Path does not exist: ${absolutePath}`));
+    if (!absolutePath) {
+      console.error(chalk.red('  Full scans require an existing directory.'));
       process.exitCode = 1;
       return;
     }
@@ -132,6 +133,7 @@ export async function auditCommand(targetPath = '.', options = {}) {
   let cacheData = useCache ? cache.load() : null;
   let cacheDiff = null;
   let allFiles = [];
+  const scanErrors = [];
 
   // ── Phase 1: Secret Scan ──────────────────────────────────────────────────
   const secretSpinner = machineOutput ? null : ora({ text: chalk.white('[Phase 1/4] Scanning for secrets...'), color: 'cyan' }).start();
@@ -217,6 +219,7 @@ export async function auditCommand(targetPath = '.', options = {}) {
         : chalk.red(`[Phase 1/4] Secrets: ${secretFindings.length} found${cacheNote}`)
     );
   } catch (err) {
+    scanErrors.push({ phase: 'secrets', message: err.message });
     if (secretSpinner) secretSpinner.fail(chalk.red(`[Phase 1/4] Secret scan failed: ${err.message}`));
   }
 
@@ -240,7 +243,7 @@ export async function auditCommand(targetPath = '.', options = {}) {
   try {
     // Suppress individual agent spinners by using quiet mode
     // Pass changedFiles for incremental scanning if cache is valid
-    const orchestratorOpts = { quiet: true };
+    const orchestratorOpts = { quiet: true, timeout: options.timeout };
     if (options.deep) orchestratorOpts.deep = true;
     if (options.local) orchestratorOpts.local = true;
     if (options.model) orchestratorOpts.model = options.model;
@@ -267,6 +270,9 @@ export async function auditCommand(targetPath = '.', options = {}) {
     recon = results.recon;
     agentFindings = results.findings;
     agentResults = results.agentResults;
+    for (const agent of agentResults.filter(agent => !agent.success)) {
+      scanErrors.push({ phase: 'agents', message: `${agent.agent}: ${agent.error || 'scan failed'}` });
+    }
 
     const totalAgentFindings = agentFindings.length;
     const agentCount = agentResults.filter(a => a.success).length;
@@ -276,23 +282,31 @@ export async function auditCommand(targetPath = '.', options = {}) {
         : chalk.yellow(`[Phase 2/4] ${agentCount} agents: ${totalAgentFindings} finding(s)`)
     );
   } catch (err) {
+    scanErrors.push({ phase: 'agents', message: err.message });
     if (agentSpinner) agentSpinner.fail(chalk.red(`[Phase 2/4] Agent scan failed: ${err.message}`));
   }
 
   // ── Phase 3: Dependency Audit ─────────────────────────────────────────────
   let depVulns = [];
+  let dependencyAudit = options.deps === false ? 'skipped' : 'not-applicable';
   if (options.deps !== false) {
     const depSpinner = machineOutput ? null : ora({ text: chalk.white('[Phase 3/4] Auditing dependencies...'), color: 'cyan' }).start();
     try {
       const depResult = await runDepsAudit(absolutePath);
       depVulns = depResult.vulns || [];
-      if (depSpinner) depSpinner.succeed(
+      dependencyAudit = depResult.error ? 'failed' : (depResult.pm ? 'complete' : 'not-applicable');
+      if (depResult.error) {
+        scanErrors.push({ phase: 'dependencies', message: depResult.error });
+        if (depSpinner) depSpinner.fail(chalk.red('[Phase 3/4] Dependency audit incomplete'));
+      } else if (depSpinner) depSpinner.succeed(
         depVulns.length === 0
           ? chalk.green('[Phase 3/4] Dependencies: clean')
           : chalk.red(`[Phase 3/4] Dependencies: ${depVulns.length} CVE(s)`)
       );
-    } catch {
-      if (depSpinner) depSpinner.succeed(chalk.gray('[Phase 3/4] Dependencies: skipped (no manifest)'));
+    } catch (err) {
+      dependencyAudit = 'failed';
+      scanErrors.push({ phase: 'dependencies', message: err.message });
+      if (depSpinner) depSpinner.fail(chalk.red('[Phase 3/4] Dependency audit incomplete'));
     }
   } else if (!machineOutput) {
     console.log(chalk.gray('  [Phase 3/4] Dependencies: skipped (--no-deps)'));
@@ -310,8 +324,9 @@ export async function auditCommand(targetPath = '.', options = {}) {
           ? chalk.green('[Phase 3b] Legal: clean')
           : chalk.yellow(`[Phase 3b] Legal: ${legalFindings.length} finding(s)`)
       );
-    } catch {
-      if (legalSpinner) legalSpinner.succeed(chalk.gray('[Phase 3b] Legal: skipped'));
+    } catch (err) {
+      scanErrors.push({ phase: 'legal', message: err.message });
+      if (legalSpinner) legalSpinner.fail(chalk.red('[Phase 3b] Legal scan incomplete'));
     }
   }
 
@@ -357,15 +372,25 @@ export async function auditCommand(targetPath = '.', options = {}) {
   // Score
   const scoringEngine = new ScoringEngine();
   const scoreResult = scoringEngine.compute(filteredFindings, depVulns);
+  const scanComplete = scanErrors.length === 0;
+  scoreResult.scanComplete = scanComplete;
+  scoreResult.scanErrors = scanErrors;
+  scoreResult.dependencyAudit = dependencyAudit;
+  if (!scanComplete) {
+    console.error('[praxis] Scan incomplete; the score reflects only available results.');
+    for (const error of scanErrors) console.error(`[praxis] ${error.phase}: ${error.message}`);
+  }
   // Round score to 1 decimal place to avoid floating-point noise (e.g., 63.300000000000004)
   scoreResult.score = Math.round(scoreResult.score * 10) / 10;
-  scoringEngine.saveToHistory(absolutePath, scoreResult, suppressions);
+  if (scanComplete) scoringEngine.saveToHistory(absolutePath, scoreResult, suppressions);
 
   // Score and filtered findings must exist before the best-effort playbook update.
   try {
-    const playbook = new ScanPlaybook(absolutePath);
-    const suppressedRules = secMemory.list().map(entry => entry.rule).filter(Boolean);
-    playbook.update(recon, { score: scoreResult.score, grade: scoreResult.grade?.letter || scoreResult.grade, totalFindings: filteredFindings.length }, filteredFindings, suppressedRules);
+    if (scanComplete) {
+      const playbook = new ScanPlaybook(absolutePath);
+      const suppressedRules = secMemory.list().map(entry => entry.rule).filter(Boolean);
+      playbook.update(recon, { score: scoreResult.score, grade: scoreResult.grade?.letter || scoreResult.grade, totalFindings: filteredFindings.length }, filteredFindings, suppressedRules);
+    }
   } catch { /* non-fatal */ }
 
   const gradeColor = scoreResult.score >= 75 ? chalk.green.bold : scoreResult.score >= 60 ? chalk.yellow.bold : chalk.red.bold;
@@ -459,7 +484,7 @@ export async function auditCommand(targetPath = '.', options = {}) {
   }
 
   // ── Save Cache ──────────────────────────────────────────────────────────
-  if (useCache) {
+  if (useCache && scanComplete) {
     try {
       // Merge agent findings back for cache (secret + agent findings from changed files)
       // plus cached findings from unchanged files
@@ -478,7 +503,86 @@ export async function auditCommand(targetPath = '.', options = {}) {
 
   // Skip all output and file generation for inner agentic re-scans
   if (options._agenticInner) {
-    return { score: scoreResult.score, findings: filteredFindings };
+    return { score: scoreResult.score, findings: filteredFindings, scanComplete, scanErrors, dependencyAudit };
+  }
+
+  // ── Agentic Loop (--agentic) ────────────────────────────────────────────
+  // Scan → annotate fixes → re-scan cycle until score >= target or maxIter.
+  // NOTE: process.exit() is deferred until after the loop so all iterations
+  // can run. The inner re-scans use _agenticInner: true to skip process.exit.
+  let verificationComplete = true;
+  if (options.agentic && !options._agenticInner && scanComplete) {
+    const maxIter = typeof options.agentic === 'number' ? options.agentic : 3;
+    const targetScore = options.agenticTarget ?? 75;
+    let iteration = 1;
+    let currentScore = scoreResult.score;
+    let currentFindings = filteredFindings;
+
+    if (!machineOutput) {
+      console.log();
+      console.log(chalk.cyan.bold(`  Agentic mode: scan→fix→verify loop (max ${maxIter} iterations, target score: ${targetScore})`));
+    }
+
+    while (currentScore < targetScore && iteration <= maxIter) {
+      if (!machineOutput) {
+        console.log(chalk.cyan(`\n  ─── Agentic iteration ${iteration}/${maxIter} (current score: ${currentScore}) ───`));
+      }
+
+      const actionable = currentFindings.filter(f => f.fix && f.severity !== 'low');
+      if (actionable.length === 0) {
+        if (!machineOutput) console.log(chalk.gray('  No auto-fixable findings — stopping agentic loop.'));
+        break;
+      }
+
+      // Delegate annotation to autofix module (handles comment style, idempotency, NEVER_EDIT list)
+      const fixCount = applyInlineAnnotations(actionable, absolutePath);
+      if (!machineOutput) {
+        console.log(chalk.yellow(`  Annotated ${fixCount} finding(s). Re-scanning...`));
+      }
+      if (fixCount === 0) break;
+
+      // Re-scan without recursing into the agentic loop or calling process.exit
+      const innerResult = await runAuditInner(targetPath, {
+        ...options,
+        agentic: false,
+        _agenticInner: true,
+        json: true,
+        sarif: false,
+        csv: false,
+        md: false,
+        html: false,
+        pdf: false,
+        quiet: true,
+      });
+
+      const prevScore = currentScore;
+      if (innerResult?.scanComplete !== true) {
+        console.error('[praxis] Agentic loop stopped: verification scan incomplete.');
+        verificationComplete = false;
+        scoreResult.scanComplete = false;
+        scanErrors.push({ phase: 'verification', message: 'Agentic verification scan incomplete' });
+        process.exitCode = 1;
+        break;
+      }
+      currentScore = innerResult?.score ?? currentScore;
+      currentFindings = innerResult?.findings ?? currentFindings;
+
+      if (!machineOutput) {
+        const diff = currentScore - prevScore;
+        const arrow = diff > 0 ? chalk.green(`↑ +${diff.toFixed(1)}`) : diff < 0 ? chalk.red(`↓ ${diff.toFixed(1)}`) : chalk.gray('→ 0');
+        console.log(chalk.cyan(`  Re-scan score: ${currentScore} ${arrow}`));
+      }
+
+      iteration++;
+    }
+
+    if (!machineOutput) {
+      if (verificationComplete && currentScore >= targetScore) {
+        console.log(chalk.green.bold(`\n  Agentic loop complete — target score ${targetScore} reached (${currentScore}).`));
+      } else {
+        console.log(chalk.yellow(`\n  Agentic loop stopped after ${iteration - 1} iteration(s). Final score: ${currentScore}`));
+      }
+    }
   }
 
   // ── Output ────────────────────────────────────────────────────────────────
@@ -568,82 +672,13 @@ export async function auditCommand(targetPath = '.', options = {}) {
     console.log();
   }
 
-  // ── Agentic Loop (--agentic) ────────────────────────────────────────────
-  // Scan → annotate fixes → re-scan cycle until score >= target or maxIter.
-  // NOTE: process.exit() is deferred until after the loop so all iterations
-  // can run. The inner re-scans use _agenticInner: true to skip process.exit.
-  if (options.agentic && !options._agenticInner) {
-    const maxIter = typeof options.agentic === 'number' ? options.agentic : 3;
-    const targetScore = options.agenticTarget ?? 75;
-    let iteration = 1;
-    let currentScore = scoreResult.score;
-    let currentFindings = filteredFindings;
-
-    if (!machineOutput) {
-      console.log();
-      console.log(chalk.cyan.bold(`  Agentic mode: scan→fix→verify loop (max ${maxIter} iterations, target score: ${targetScore})`));
-    }
-
-    while (currentScore < targetScore && iteration <= maxIter) {
-      if (!machineOutput) {
-        console.log(chalk.cyan(`\n  ─── Agentic iteration ${iteration}/${maxIter} (current score: ${currentScore}) ───`));
-      }
-
-      const actionable = currentFindings.filter(f => f.fix && f.severity !== 'low');
-      if (actionable.length === 0) {
-        if (!machineOutput) console.log(chalk.gray('  No auto-fixable findings — stopping agentic loop.'));
-        break;
-      }
-
-      // Delegate annotation to autofix module (handles comment style, idempotency, NEVER_EDIT list)
-      const fixCount = applyInlineAnnotations(actionable);
-      if (!machineOutput) {
-        console.log(chalk.yellow(`  Annotated ${fixCount} finding(s). Re-scanning...`));
-      }
-      if (fixCount === 0) break;
-
-      // Re-scan without recursing into the agentic loop or calling process.exit
-      const innerResult = await runAuditInner(targetPath, {
-        ...options,
-        agentic: false,
-        _agenticInner: true,
-        json: false,
-        sarif: false,
-        csv: false,
-        md: false,
-        html: false,
-        pdf: false,
-        quiet: true,
-      });
-
-      const prevScore = currentScore;
-      currentScore = innerResult?.score ?? currentScore;
-      currentFindings = innerResult?.findings ?? currentFindings;
-
-      if (!machineOutput) {
-        const diff = currentScore - prevScore;
-        const arrow = diff > 0 ? chalk.green(`↑ +${diff.toFixed(1)}`) : diff < 0 ? chalk.red(`↓ ${diff.toFixed(1)}`) : chalk.gray('→ 0');
-        console.log(chalk.cyan(`  Re-scan score: ${currentScore} ${arrow}`));
-      }
-
-      iteration++;
-    }
-
-    if (!machineOutput) {
-      if (currentScore >= targetScore) {
-        console.log(chalk.green.bold(`\n  Agentic loop complete — target score ${targetScore} reached (${currentScore}).`));
-      } else {
-        console.log(chalk.yellow(`\n  Agentic loop stopped after ${iteration - 1} iteration(s). Final score: ${currentScore}`));
-      }
-    }
-  }
-
   // ── Exit code logic ─────────────────────────────────────────────────────
   // Only gate the exit code when --fail-below is explicitly requested;
   // a plain scan reports findings and exits 0 (CI gating belongs to `scan ci`).
   // Use process.exitCode (natural event-loop drain) instead of process.exit()
   // so in-flight libuv handles (plugin dynamic imports, etc.) close cleanly.
-  if (options.failBelow !== undefined) {
+  if (!scanComplete || !verificationComplete) process.exitCode = 1;
+  if (scanComplete && verificationComplete && options.failBelow !== undefined) {
     let threshold = 75;
     if (options.failBelow === 'baseline') {
       // Read baseline score from .praxis/hermes-baseline.json
@@ -886,6 +921,9 @@ function printReport(scoreResult, findings, depVulns, recon, plan, rootPath, fil
 function outputJSON(scoreResult, findings, depVulns, recon, agentResults, remediationPlan, suppressions, history, filesScanned = null, absolutePath = process.cwd()) {
   const output = {
     score: scoreResult.score,
+    scanComplete: scoreResult.scanComplete,
+    scanErrors: scoreResult.scanErrors,
+    dependencyAudit: scoreResult.dependencyAudit,
     grade: scoreResult.grade.letter,
     gradeLabel: scoreResult.grade.label,
     totalFindings: findings.length,
@@ -1037,6 +1075,8 @@ function scanFileForSecrets(filePath) {
         pattern.pattern.lastIndex = 0;
         let match;
         while ((match = pattern.pattern.exec(line)) !== null) {
+          if (isDocumentedSecretExample(pattern.name, match[0])) continue;
+
           if (pattern.requiresEntropyCheck && !isHighEntropyMatch(match[0])) continue;
           findings.push({
             line: lineNum + 1, column: match.index + 1, matched: match[0],

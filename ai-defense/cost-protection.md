@@ -1,5 +1,11 @@
 # AI Cost Protection Guide
 
+> These examples are illustrative and require adaptation and tests. Prompt text,
+> keyword filters, and in-memory limits do not enforce authorization or tenant
+> isolation. Apply access controls, tool restrictions, and resource limits in code;
+> test the deployed system against its actual threat model.
+
+
 **Prevent your AI features from bankrupting you.**
 
 Real incidents: $50k+ bills from runaway AI usage, abuse, or misconfiguration.

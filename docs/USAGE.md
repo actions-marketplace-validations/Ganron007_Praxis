@@ -1,10 +1,14 @@
 # Praxis — Complete Usage Guide
 
-AI-native security CLI for AI-augmented codebases. Single binary, find→fix→verify
-loop on autopilot. 28 parallel security agents (24 built-in + ModelFileScanner +
-PromptInjectionProber + AgentTelemetryAgent + EndpointAgentAbuseAgent), multi-source threat intel, modular alignment with 8 AI-security
-standards, LLM-powered remediation with diff review and undo log. Works fully
-offline; LLM features are optional.
+Security CLI for AI applications and codebases. Praxis runs 28 built-in scanners
+in parallel batches, maps findings to security standards, and supports reviewed
+LLM remediations with verification and an undo log. Requires Node.js 18 or newer.
+
+For a local static audit, use `praxis scan . --no-ai --no-deps`. Default dependency
+audits contact package services, and configured LLM providers may classify findings.
+`--deep`, swarm analysis, LLM fixes, credential verification, feed updates, Git
+clones, and live probes can also contact external services. `--no-ai` disables
+classification; it does not disable those separately requested features.
 
 ---
 
@@ -42,7 +46,7 @@ offline; LLM features are optional.
 
 ```bash
 # From source (this repo)
-npm install
+npm ci
 npm link                         # exposes `praxis` globally
 
 # Or run directly without linking
@@ -93,6 +97,22 @@ Plus three top-level shortcuts: `praxis vibe`, `praxis score`, and `praxis` alon
 
 Full audit: secrets + 28 agents + deps + score + remediation plan.
 
+Local scan roots must be existing directories. Passing a file produces an error.
+Use `scan changed` for a change-based scan; the editor's current-file command
+scans its workspace and selects findings for that file.
+
+Full-scan JSON contains:
+
+- `scanComplete`: true only when required scan stages completed.
+- `scanErrors`: errors from discovery, agents, dependency auditing, or requested legal analysis.
+- `dependencyAudit`: `complete`, `skipped`, `not-applicable`, or `failed`.
+
+Incomplete scans exit 1, do not refresh scan cache/history/playbook state, and
+cannot verify a fix. Findings alone do not fail a normal full scan; use `scan ci`
+for severity or score gates. Keep stderr and inspect completion before treating
+JSON output or a high score as a successful assessment. Skipped checks provide
+no assurance for that part of the project.
+
 | Flag | Description |
 | --- | --- |
 | `--json` | Output results as JSON |
@@ -116,7 +136,7 @@ Full audit: secrets + 28 agents + deps + score + remediation plan.
 | `--budget <cents>` | Max spend in cents for deep analysis (default 50) |
 | `--verify` | Check if leaked secrets are still active |
 | `--include-legal` | Also run the legal risk scan |
-| `--agentic [iterations]` | Agentic scan→fix→verify loop |
+| `--agentic [iterations]` | Legacy annotation loop: adds review comments, then re-scans; does not apply the proposed remediation |
 | `--agentic-target <score>` | Target security score for agentic loop |
 | `--hermes-only` | Run only Hermes-relevant agents |
 | `--fail-below <threshold>` | Exit 1 if score < threshold |
@@ -182,13 +202,13 @@ Credential health check: `.env` coverage, source cross-ref, git history.
 
 ### `scan redteam [path]` / `praxis redteam [target]`
 
-Dynamic AI Red Teaming & DAST Prober: executes 80+ attack classes statically and probes live LLM endpoints / agent runtimes with jailbreak, prompt injection, and goal-hijacking payloads.
+`scan redteam <directory>` runs the static adversarial agent pack.
+`praxis redteam <endpoint>` runs dynamic probes against an authorized live LLM
+endpoint. These commands have different options; consult each command's `--help`.
+The table below describes the static command.
 
 | Flag | Description |
 | --- | --- |
-| `--endpoint <url>` | Target live LLM API endpoint for dynamic DAST probing |
-| `--model <model>` | Target model identifier |
-| `--probes <tags>` | Comma-separated probe categories (`jailbreak`, `injection`, `override`, `exfil`) |
 | `--agents <list>` | Comma-separated list of static agents to run |
 | `--json` | JSON output |
 | `--sarif` | SARIF output |
@@ -197,13 +217,13 @@ Dynamic AI Red Teaming & DAST Prober: executes 80+ attack classes statically and
 | `--no-deps` | Skip dependency audit |
 | `--no-ai` | Skip AI classification |
 | `--deep` | LLM-powered taint analysis with AST scope evaluation |
-| `--swarm` | AI swarm mode — 23 parallel agents via DeepSeek/Kimi |
+| `--swarm` | Send selected source context and role instructions to a configured swarm provider; provider execution is separate from the 28 local scanners |
 | `--think`, `--local`, `--model`, `--provider`, `--base-url`, `--budget` | LLM controls (same as `scan full`) |
 | `-v, --verbose` | Verbose output |
 
 ### `scan standard [name] [path]`
 
-Filter findings by AI-security standard. **New in this release.**
+Filter findings by AI-security standard.
 
 | Flag | Description |
 | --- | --- |
@@ -583,7 +603,7 @@ than silently passed off as checked.
 Rule **ids are identifiers** (`AWS_ACCESS_KEY_ID`, not `AWS Access Key ID`), because
 Semgrep suppressions (`# nosemgrep:`) and baselining key on them.
 
-**Scope — what the export does not cover.** 411 of the rules are static patterns. Three
+**Scope — what the export does not cover.** The inventory identifies the rules that are static patterns. Three
 layers have no Semgrep representation and are declared in the manifest rather than
 approximated:
 
@@ -803,7 +823,7 @@ Praxis incorporates a pure ESM, zero-native-dependency AST & CST analysis engine
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Claude (Opus / Sonnet / Haiku) |
 | `OPENAI_API_KEY` | OpenAI (GPT-4 / GPT-4o / o1) |
-| `GOOGLE_AI_API_KEY` | Gemini |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Gemini |
 | `MOONSHOT_API_KEY` | Kimi |
 | `OPENAI_BASE_URL` | Custom OpenAI-compatible endpoint (OpenRouter, Groq, DeepSeek, LM Studio, vLLM, ...) |
 | `PRAXIS_LLM_MODEL` | Default model when no `--model` flag is given |
@@ -961,7 +981,7 @@ only ever emits a known class name.
 prints a provenance line in its footer:
 
 ```
-praxis 1.2.3 · node v24.14.1 · probes v1.1(23) · threatpack v1.1(3) · eaa v0.1.0 · files 215
+praxis <version> · node <runtime> · probes <version/count> · threatpack <version/count> · eaa <version> · files <count>
 ```
 
 It records the tool version, the runtime, and the version of every vendored data asset
@@ -999,66 +1019,66 @@ between releases.
 
 ## CI/CD integration
 
-### GitHub Action (composite)
+### GitHub Action
 
-The repo ships an `action.yml` (composite action) that runs `praxis ci` and
-uploads SARIF.
-
-```yaml
-- uses: ./
-  with:
-    path: .
-    threshold: '80'
-    deep: 'false'
-    deps: 'true'
-    sarif: 'true'
-    comment: 'true'
-    # PR regression gating — scan the base ref and fail only on NEW findings
-    net-new: 'true'
-    fail-on-new: 'high'
-    # severity floor a baseline can't suppress
-    always-fail-on: 'critical'
-  env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-Outputs: `score`, `grade`, `findings`, `secrets`, `vulns`, `cves`, `sarif-file`.
-
-**Net-new PR gating** (`net-new: true`, pull-request events only): the action
-checks out the PR base into a worktree, scans it, and diffs finding identities
-(`file:rule`) against the head scan. Only findings *introduced by the PR* can
-fail the build, at or above `fail-on-new`. Pre-existing debt never blocks.
-
-### Plain GitHub Actions
+The [Marketplace Action](https://github.com/marketplace/actions/praxis-security-scan)
+installs dependencies from its own lockfile and scans with the code selected by
+the Action ref. It does not depend on npm latest being synchronized with GitHub.
 
 ```yaml
+name: Security
+on: [push, pull_request]
 permissions:
-  security-events: write     # required for SARIF upload
-steps:
-  - run: npm install -g praxis-sec@latest
-  - run: praxis ci . --threshold 80 --sarif results.sarif --strict-intel
-  - uses: github/codeql-action/upload-sarif@v4
-    with: { sarif_file: results.sarif }
-```
-
-`security-events: write` is required — without it the upload fails with a 403 even though
-the scan itself succeeded.
-
-### Using the action from another repository
-
-Once the action is listed on the GitHub Marketplace and a `v1` release tag exists:
-
-```yaml
-permissions:
+  contents: read
   security-events: write
-steps:
-  - uses: Ganron007/Praxis@v1
-    with:
-      net-new: 'true'
-      fail-on-new: 'high'
+  pull-requests: write
+jobs:
+  praxis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Ganron007/Praxis@v1.2.4
+        with:
+          path: '.'
+          threshold: '80'
+          deps: 'true'
+          deep: 'false'
+          sarif: 'true'
+          comment: 'true'
+          net-new: 'true'
+          fail-on-new: 'high'
+          always-fail-on: 'critical'
 ```
 
-Inside this repository `- uses: ./` works immediately and needs no publishing step.
+Use a release tag or commit for reproducibility; `v1` is a floating release-line
+tag. Inside this repository, `uses: ./` runs the checked-out source.
+
+Outputs: `score`, `grade`, `findings`, `secrets`, `vulns`, `cves`,
+`sarif-file`, and `report-url`. See [action.yml](../action.yml) for all inputs.
+
+On pull requests, `net-new: true` scans the base in a worktree and compares
+finding identities against the head scan. Introduced findings at or above
+`fail-on-new` fail the gate. `always-fail-on` also checks existing findings;
+scan and comparison failures fail the job. Other events use the normal gate.
+
+SARIF upload needs `security-events: write`; PR comments need
+`pull-requests: write`. Fork PR tokens and repository Code Scanning settings can
+restrict these integrations. Set `sarif: 'false'` or `comment: 'false'` when
+unavailable. The security gate operates independently of those integrations.
+
+### Plain CLI in CI
+
+After 1.2.4 is published to npm, install that exact version in your CI setup:
+
+```bash
+npm install -g praxis-sec@1.2.4
+praxis scan ci . --fail-on high --sarif results.sarif
+```
+
+Keep the command's exit status. Store JSON as a regular artifact; Praxis JSON
+is not the GitLab SAST report schema. Upload SARIF to a compatible service with
+the necessary permissions. If using `--strict-intel`, refresh the feed first
+and ensure its configured sources completed successfully.
 
 ### Determinism gate
 
@@ -1070,10 +1090,10 @@ detection change cannot land unnoticed:
 node scripts/check-determinism.mjs .
 ```
 
-CI runs this as its own job. A failure means the rule set, the probe corpus or the
-threatpack changed behaviour — which is sometimes intended (a version bump should change
-results), so the gate exists to make the change *deliberate* and visible in the diff
-rather than silent.
+CI runs this as its own job. A failure means identical inputs produced different
+finding identities across runs. Investigate unstable discovery, ordering, caches,
+or external state. An intentional detection change between releases does not
+justify drift between two scans of the same checkout.
 
 ---
 
@@ -1168,7 +1188,7 @@ plugin-side wiring required.
 | `rules import` says "YAML is an export format" | Import the sibling `praxis-rules.json`. Praxis has no YAML runtime dependency, so YAML is export-only. |
 | `praxis web` refuses to start on a non-loopback host | Remote bind requires **both** `--allow-remote` and `--token` of at least 16 characters. This is deliberate. |
 | `praxis web` won't load a project path | Projects are registered by the operator and addressed by **id**. The API intentionally does not accept client-supplied paths. |
-| Determinism gate fails in CI | Two scans of identical inputs disagreed on `file::rule`. Usually a probe-corpus or threatpack change — check `git diff` on `cli/data/`. Expected when you intentionally change detection. |
+| Determinism gate fails in CI | Two scans of identical inputs disagreed on `file::rule`. Investigate unstable discovery, caches, ordering, or external state; a detection change between commits does not justify drift in one checkout. |
 
 ---
 
@@ -1187,14 +1207,14 @@ npx praxis-sec mcp
 
 ### IDE integration
 
-Cursor / Continue config (`.continue/config.yaml` or Cursor MCP settings):
+Illustrative stdio configuration (adapt the wrapper schema to your IDE; the package must be preinstalled):
 
 ```yaml
 mcpServers:
   - name: praxis
     transport: stdio
     command: npx
-    args: ["praxis", "mcp"]
+    args: ["--no-install", "praxis-sec", "mcp"]
 ```
 
 In Docker (a container running praxis):
@@ -1204,7 +1224,7 @@ mcpServers:
   - name: praxis
     transport: stdio
     command: docker
-    args: ["exec", "-i", "darkai-ops", "praxis", "mcp"]
+    args: ["exec", "-i", "your-container", "praxis", "mcp"]
 ```
 
 ### Available MCP tools
@@ -1212,17 +1232,18 @@ mcpServers:
 | Tool | Input | Returns | Description |
 |------|-------|---------|-------------|
 | `scan_secrets` | `{ path }` | findings[] | Scan a file/directory for hardcoded secrets |
-| `scan_repo` | `{ path, deep? }` | findings[] + score | Full orchestrator scan (all 28 agents + intel) |
-| `analyze_file` | `{ path }` | findings[] | Deep LLM analysis of a single file |
-| `get_findings` | `{ severity? }` | findings[] | Retrieve cached findings (optionally filtered) |
+| `scan_repo` | `{ path, agents?, llm?, outputFile? }` | findings + score + completion | Built-in orchestrator scan; dependency audit skipped; optional LLM analysis |
+| `analyze_file` | `{ path }` | findings | Static secret analysis of a file |
+| `get_findings` | `{ reportPath, severity? }` | report + findings | Read an explicitly saved JSON report |
 | `get_checklist` | — | checklist[] | Launch-day security checklist items |
-| `suppress_finding` | `{ id, reason }` | `{ ok }` | Suppress a finding (writes to `.praxis/ignores.json`) |
+| `suppress_finding` | `{ file, line, reason }` | suppression status | Append a trailing comment to a reviewed source line; supported comment formats only |
+| `explain_and_fix` | `{ file, line, rule }` | explanation + preview | AST-aware explanation and proposed fix preview |
 
 ### Example MCP interaction
 
 When connected, an IDE user can ask: *"Scan this file for AI vulnerabilities"*
 and the LLM calls `scan_repo` — Praxis findings appear inline in the chat with
-file:line references. The `deep` flag triggers LLM-powered taint analysis.
+file:line references. The `llm` option requests provider-backed analysis. Require `scanComplete === true`, inspect errors, and disclose skipped checks. Suppression writes source and is not remediation.
 
 ---
 

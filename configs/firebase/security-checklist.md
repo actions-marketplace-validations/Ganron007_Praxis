@@ -24,11 +24,11 @@ allow read, write: if request.time < timestamp.date(2024, 12, 31);
 ### 2. [ ] Firestore rules require authentication
 
 ```javascript
-// GOOD: Requires authentication
+// Authentication check alone: insufficient for private per-user data
 allow read, write: if request.auth != null;
 
 // BETTER: Requires authentication AND ownership
-allow read, write: if request.auth.uid == userId;
+allow read, write: if request.auth != null && request.auth.uid == userId;
 ```
 
 ### 3. [ ] Storage rules have file type validation
@@ -49,7 +49,7 @@ allow write: if request.resource.size < 5 * 1024 * 1024;
 ### 5. [ ] Default deny rule at the end
 
 ```javascript
-// Catch-all: deny everything not explicitly allowed
+// Explicit default deny. Matching allow rules are additive; this does not override another allow.
 match /{document=**} {
   allow read, write: if false;
 }

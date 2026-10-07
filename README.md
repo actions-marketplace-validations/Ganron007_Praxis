@@ -1,7 +1,7 @@
 # Praxis
 
 <p align="center">
-  <img src="assets/praxis-logo.svg" alt="Praxis Logo" width="620">
+  <img src="assets/praxis-logo.svg" alt="Praxis" width="620">
 </p>
 
 <p align="center">
@@ -9,183 +9,152 @@
   <a href="https://github.com/marketplace/actions/praxis-security-scan"><img src="https://img.shields.io/badge/Marketplace-Praxis%20Security%20Scan-blue" alt="GitHub Marketplace"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A518.0.0-blue.svg" alt="Node.js: >=18.0.0">
-  <img src="https://img.shields.io/npm/v/praxis-sec?label=Version" alt="npm version">
+  <img src="https://img.shields.io/npm/v/praxis-sec?label=npm" alt="npm version">
   <img src="https://img.shields.io/badge/Status-Public%20Beta-yellow.svg" alt="Status: Public Beta">
 </p>
 
-**Praxis is an AI Security Testing (AIST) CLI — an AI-native scanner with a working fix loop.** 28 parallel agents assess the entire AI/agent attack surface — LLM apps, agents, MCP servers, RAG pipelines, model files, datasets, eval harnesses — plus a baseline of secrets and code vulnerabilities. An LLM drafts fixes you approve, applies, verifies, and can undo. Offline by default. No registration, no data leaves your machine.
+**Praxis scans AI applications and codebases, helps you review fixes, and verifies the changes.** Its 28 built-in scanners cover LLM integrations, agents, MCP servers, RAG pipelines, model files, secrets, and common code vulnerabilities. Static analysis runs locally; optional LLM analysis and live probes extend the workflow.
 
 > [!IMPORTANT]
-> **Local & gated by design.** Core scans run entirely offline. LLM remediation is
-> opt-in, drafts diffs for your approval, writes atomically, and logs every change
-> for undo.
-
----
-
-## What it does
-
-| Capability | In one line |
-| --- | --- |
-| **AI/agent surface audit** | 28 concurrent agents: prompt injection, MCP tool abuse, agent-memory poisoning, pickle-based model files, RAG, agent session telemetry, local agent-abuse (EAA), and AI infrastructure inventory (gateways, runtimes, API endpoints) |
-| **AST & Taint Dataflow** | Pure ESM AST & CST parsing (JS/TS & Python) with lexical scope trees, intra-file taint tracking, source-to-sink data flow, and guardrail detection |
-| **Dynamic AI Red Teaming** | DAST fuzzing engine for live LLM endpoints and agent runtimes (`praxis redteam`) with customizable attack probes and evasion benchmarks |
-| **Find → fix → verify** | LLM drafts a diff → you approve → atomic apply → tiered verification ladder (AST syntax → build → tests → re-scan) with auto-revert of failed fixes → undo log |
-| **Governance audits** | Detects *missing* controls: no human-oversight gates, no observability wiring — EU AI Act Art. 14 / 12 evidence |
-| **MCP trust registry & live probing** | Known MCP servers with trust scores (SHA-256 integrity-checked) + live runtime JSON-RPC handshakes and tool fuzzing (`--test-live`) |
-| **Threat intel** | 7 core sources cached locally — 6 remote feeds (OSV, GHSA, KEV, EPSS, NVD, Gitleaks) plus the bundled AI threatpack — and 5 optional keyed providers (Snyk, Socket, Phylum, Sonatype, GitGuardian); findings enriched with exploit likelihood |
-| **Compliance mapping** | Findings tagged against 8 frameworks — OWASP LLM/ML/Agentic, MITRE ATLAS (+ mitigations & case studies), NIST AI 600-1, AVID, EU AI Act, ISO 42001, Google SAIF |
-| **Professional HTML report** | Tabbed single-file report: overview KPIs + severity distribution, OWASP ASI agentic-risk coverage, per-agent coverage, findings with rule IDs and AST taint blocks, standards matrix, Agent BOM, remediation plan, remediation ledger (incl. declines and reasons), score trend, and a provenance footer |
-| **Web UI** | `praxis web` — register projects, run scans, watch live progress, browse findings. Read-only, loopback-only by default |
-| **Portable rules** | `praxis rules export` — 411 pattern rules as Semgrep-compatible YAML, with a manifest that states plainly what Praxis does that Semgrep cannot |
-| **CI-native** | `scan ci` gates, SARIF for Code Scanning with real `security-severity` ranking, net-new PR gating (fails only on *introduced* findings), GitHub Action inline PR annotations |
-| **Reproducible** | Every scan reports a provenance fingerprint (tool, runtime, probe/threatpack/data versions), and CI enforces determinism between two runs |
+> For a local static scan, run `praxis scan . --no-ai --no-deps`.
+> Default scans audit dependencies over the network and may classify findings with a configured LLM provider.
+> Deep analysis, LLM fixes, feed updates, credential verification, Git clones, and live probes can contact external services.
+> Review provider configuration and proposed changes before using these features on sensitive projects.
 
 ## Install
 
 ```bash
-npm install -g praxis-sec     # then just run: praxis
-npx praxis-sec scan .         # or no install at all
+npm install -g praxis-sec
+praxis --version
 ```
 
-Requires Node.js 18+. Nothing else — no account, no API key. LLM-assisted remediation is
-opt-in via `--deep`.
+Requires Node.js 18 or newer. The npm package is **`praxis-sec`**; it installs the **`praxis`** command. Static scanning needs no account or API key. LLM features require a configured cloud or local provider.
 
-> **The package is `praxis-sec`, but the command is `praxis`.** The unscoped `praxis` name on
-> npm belongs to an unrelated project, so the distribution carries a suffix. Installing it puts
-> a `praxis` executable on your PATH, so every example below reads `praxis …`.
+GitHub releases and npm publication are separate. The [1.2.4 release notes](docs/RELEASE-1.2.4.md) describe this patch; the npm badge shows the version currently published to npm. To use a GitHub release before npm publication, install its attached package tarball, or check out the tag and run `npm ci` followed by `node cli/bin/praxis.js --version`.
 
 ## Quick start
 
 ```bash
-npm install -g praxis-sec
-
-praxis scan .            # full 28-agent audit + AST taint evaluation
-praxis scan git <url>    # direct remote Git repo audit (clones to temp dir & audits)
-praxis fix .             # interactive LLM-guided fixes
-praxis scan redteam .   # adversarial agent pack against a local codebase
-praxis agents audit .    # audit the AI/agent surface
-praxis agents mcp --test-live  # live MCP JSON-RPC probe
-praxis web               # local web UI for scans and findings
-praxis report benchmark  # run ground-truth accuracy benchmark
-praxis rules export      # portable Semgrep-compatible rule bundle
-praxis intel update      # refresh local threat feeds
-praxis vibe .            # emoji-graded A–F score
+praxis scan . --no-ai --no-deps # local static audit
+praxis scan .                  # full audit, including dependency CVEs
+praxis scan ci . --fail-on high # fail on high/critical findings or an incomplete scan
+praxis fix .                   # interactive LLM-guided fixes
+praxis scan redteam . --no-ai   # static adversarial scanners
+praxis agents audit .          # agent configuration audit
+praxis web                     # local web UI
+praxis rules list              # rule inventory
+praxis intel update            # refresh threat feeds over the network
 ```
 
-`praxis --help` lists everything. Run `praxis` with no args for the interactive REPL.
+Scan roots must be directories. Use `praxis --help` and each command's `--help` for available options. Running `praxis` without arguments on a terminal opens the interactive REPL.
 
-## How it works
+## What it does
+
+| Capability | Coverage |
+| --- | --- |
+| AI and agent scanning | Prompt injection, MCP tool abuse, agent memory, model deserialization, RAG, telemetry, agent configuration, and infrastructure inventory |
+| Code analysis | Patterns, JS/TS and Python parsing, lexical scopes, intra-file taint tracking, and guardrail detection |
+| Fix workflow | Proposed diffs, approval, atomic writes, available project checks, complete re-scans, failed-fix rollback, and an undo ledger |
+| Live testing | `praxis redteam <endpoint>` for LLM endpoint probes; `praxis agents mcp --test-live` for MCP runtime checks |
+| Threat intelligence | Cached advisory and exploit data, a bundled AI threatpack, and optional keyed providers |
+| Standards mapping | OWASP LLM/ML/Agentic, MITRE ATLAS, NIST AI 600-1, AVID, EU AI Act, ISO 42001, and Google SAIF references |
+| Reports | JSON, SARIF, HTML, Markdown, CSV, and print-rendered PDF |
+| CI integration | Severity/score gates, baseline and net-new PR comparison, SARIF upload, and PR summaries |
+| Portable rules | Pattern exports with a manifest describing features that cannot be represented as Semgrep rules |
 
 <p align="center">
-  <img src="assets/praxis-architecture.svg" alt="Praxis Architecture" width="100%">
+  <img src="assets/praxis-architecture.svg" alt="Praxis architecture" width="100%">
 </p>
 
-## Command groups
+## Commands
 
-```
+```text
 praxis scan       full · git · secrets · changed · env · redteam · standard · ci
 praxis fix        interactive · quick · from-report · rotate · undo · env-template
-praxis agents     audit · skill · mcp · bom · serve (MCP server)
+praxis agents     audit · skill · mcp · bom · serve
 praxis intel      update · deps · advisories
 praxis report     team · legal · checklist · sbom · benchmark
 praxis project    init · doctor · hooks · guard · watch · baseline · memory · playbook · plugins · policy
-praxis rules      list · export · import          (portable rule bundles)
-praxis web        local web UI                    (read-only, loopback by default)
-
-praxis redteam    DAST red team against a live LLM endpoint
-praxis hooks      Claude Code tool-call security gate
-praxis vibe       emoji-graded A–F score
-praxis score      numeric score
+praxis rules      list · export · import
+praxis web        local scan UI
 ```
 
-> `praxis redteam` takes a **live endpoint** (e.g. `praxis redteam https://api.example.com`).
-> To run the adversarial agent pack against a **local codebase**, use
-> `praxis scan redteam <path>`.
+`praxis scan redteam <directory>` scans source code. `praxis redteam <endpoint>` sends probes to a live endpoint; use it only on targets you are authorized to test.
 
-## 28 agents at a glance
+## Scan status and interpretation
 
-| Cluster | Agents | Covers |
-| --- | --- | --- |
-| AI / LLM security | 13 | Prompt injection, MCP, agentic AI, RAG, memory poisoning, model files, agent configs, agent telemetry & abuse (EAA), AI infra inventory |
-| Code vulnerabilities | 4 | Injection, SSRF, XSS, ReDoS, exception handling, vibe-coding anti-patterns |
-| Auth & API | 3 | JWT flaws, CSRF, IDOR/BOLA, Supabase RLS, unauthenticated routes |
-| Supply chain | 3 | Typosquatting, malicious scripts, agent attestation, CI permissions |
-| Config & platform | 5 | Docker, K8s, Terraform, CORS/CSP, mobile, CICD, git history, PII |
+Full-scan JSON exposes `scanComplete`, `scanErrors`, and `dependencyAudit`. An incomplete scan exits unsuccessfully and cannot verify a fix. A deliberately skipped dependency audit is reported as `skipped`; it provides no dependency assurance.
 
-Full agent list and rule IDs: **[docs/USAGE.md](docs/USAGE.md)**.
+A normal full scan can exit successfully while reporting findings. Use `scan ci` or `--fail-below` to enforce a gate. A score summarizes detected findings; it does not establish that a project is secure or compliant. Review evidence, false positives, exclusions, and enabled checks.
 
 ## LLM configuration
 
-Optional, for `--deep` analysis, `redteam`, and `fix interactive`. Put a `.env` in your working
-directory — any OpenAI-compatible gateway works:
+Praxis loads a local `.env` automatically. A configured provider can be used for finding classification; `--no-ai` disables classification. `--deep`, LLM fixes, and swarm analysis are separate features and can still use a provider.
 
-```bash
-OPENAI_API_KEY=sk-...
+```dotenv
+OPENAI_API_KEY=replace-with-your-key
 OPENAI_BASE_URL=https://your-gateway.example/v1/chat/completions
 PRAXIS_LLM_MODEL=your-model
-PRAXIS_LLM_REASONING=high   # low | medium | high
+PRAXIS_LLM_REASONING=high
 ```
 
-Template: [`.env.example`](.env.example) · Verify with `praxis project doctor`.
+See [the environment template](.env.example) and [provider configuration](docs/USAGE.md#environment-variables). Keep real credentials out of version control. Check configuration with `praxis project doctor`.
 
-## CI
+## GitHub Action
 
-```yaml
-- uses: Ganron007/Praxis@v1
-  with:
-    threshold: '80'
-    net-new: 'true'        # fail only on findings introduced by the PR
-    fail-on-new: 'high'
-    always-fail-on: 'critical'
-    sarif: 'true'          # upload to GitHub Code Scanning
-```
-
-For `sarif: true`, grant the job permission to upload to Code Scanning:
+The Action runs the code selected by its Git ref, independently of the npm latest version.
 
 ```yaml
+name: Security
+on: [push, pull_request]
 permissions:
+  contents: read
   security-events: write
+  pull-requests: write
+jobs:
+  praxis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Ganron007/Praxis@v1.2.4
+        with:
+          threshold: '80'
+          net-new: 'true'
+          fail-on-new: 'high'
+          always-fail-on: 'critical'
+          sarif: 'true'
+          comment: 'true'
 ```
 
-`net-new: true` scans the PR's base ref in a worktree and fails only on findings the PR
-*introduced*, so an inherited backlog never blocks a merge.
+On pull requests, `net-new` compares the base and head scans. Existing findings are excluded from the introduced-finding gate, but `always-fail-on` and scan failures still fail the job. On other events, the regular gate applies. SARIF and PR comments need their respective write permissions; repository settings and fork PR restrictions can limit them. Disable either integration if those permissions are unavailable.
+
+Pin a release tag or commit for reproducibility. The floating `v1` tag tracks the maintained release line. See [CI integration](docs/USAGE.md#cicd-integration) for inputs, outputs, and plain CLI examples.
 
 ## Portable rules
 
-Praxis rules are portable data, not lock-in:
-
 ```bash
-praxis rules list                    # rule inventory by source, severity, portability
-praxis rules export -o ./rules       # Semgrep YAML + canonical JSON + portability manifest
+praxis rules list
+praxis rules export -o ./rules
 semgrep --config ./rules/praxis-rules.yaml .
-```
-
-The export covers the **411 pattern rules**. The accompanying
-`praxis-rules.manifest.json` states plainly what Praxis does that Semgrep cannot express —
-AST/taint dataflow, the prompt-injection probe corpus, entropy-checked secrets, and LLM deep
-analysis — rather than implying full coverage. Import round-trips through the JSON:
-
-```bash
 praxis rules import ./rules/praxis-rules.json --write-plugin .praxis/agents
 ```
 
-Rules that cannot be executed as static patterns are rejected **with a reason**, never
-imported in a degraded form.
+The export manifest identifies pattern rules and explains limitations for AST/taint dataflow, probe signatures, entropy checks, and LLM analysis. Imported plugins are executable code; enable them only after review. See [custom plugins](docs/USAGE.md#custom-plugins).
 
 ## Documentation
 
-| Document | Content |
-| --- | --- |
-| [docs/USAGE.md](docs/USAGE.md) | Complete command & flag reference |
-| [docs/THREAT_INTEL.md](docs/THREAT_INTEL.md) | Feed architecture & schemas |
-| [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md) | Vendored data attribution |
-| [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) | Contributing & agent authoring |
-| [.github/SECURITY.md](.github/SECURITY.md) | Reporting vulnerabilities |
+- [Usage guide](docs/USAGE.md): commands, options, configuration, and reports
+- [1.2.4 release notes](docs/RELEASE-1.2.4.md): fixes and validation
+- [Release procedure](docs/RELEASING.md): versioning, gates, tags, and npm handoff
+- [Threat intelligence](docs/THREAT_INTEL.md): sources, caching, and freshness
+- [Third-party notices](docs/THIRD_PARTY_NOTICES.md): vendored data attribution
+- [Claude Code plugin](claude-code-plugin/README.md) and [VS Code extension](vscode-extension/README.md)
+- [Contributing](.github/CONTRIBUTING.md) and [security reporting](.github/SECURITY.md)
 
-## Scope & limitations
+## Scope and limitations
 
-Praxis is an **AI-security-first** scanner combining pattern recognition, pure ESM AST & CST parsing, intra-file taint analysis, dynamic endpoint probing, and LLM verification. While significantly minimizing false positives and mapping dataflow from user input to hazardous sinks, standards mapping reports controls with evidence rather than formal compliance certification. Review fixes before applying them to production.
+Praxis combines static heuristics, intra-file analysis, optional LLM judgments, and live probes. Findings need review; a completed scan can miss vulnerabilities and can report false positives. Standards tags provide control references and evidence, not compliance certification. LLM verdicts are advisory, and verification depends on the available checks in the target project.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Praxis contributors.
+MIT. See [LICENSE](LICENSE) and [third-party notices](docs/THIRD_PARTY_NOTICES.md).

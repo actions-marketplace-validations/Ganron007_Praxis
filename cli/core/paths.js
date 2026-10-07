@@ -35,7 +35,7 @@ const toSlash = (p) => String(p).split(path.sep).join('/').replace(/\\/g, '/');
 // normally come from the host's own glob, but a path read back from a report or
 // a cache can carry the other platform's shape, and treating it as relative would
 // print a drive letter straight into the output. Same guard sarif.js uses.
-const isAbsoluteLike = (s) => path.isAbsolute(s) || /^[a-zA-Z]:[\\/]/.test(s);
+const isAbsoluteLike = (s) => path.isAbsolute(s) || /^[a-zA-Z]:[\\/]/.test(s) || /^\\\\/.test(s);
 
 /**
  * Render a finding's file for display.
@@ -58,7 +58,7 @@ export function displayPath(file, root) {
   if (root) {
     const rel = path.relative(root, s);
     // `rel` starting with '..' means the file is outside the scan root.
-    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return toSlash(rel);
+    if (rel && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)) return toSlash(rel);
   }
 
   const home = os.homedir();
@@ -68,7 +68,7 @@ export function displayPath(file, root) {
 
   // Outside the root and outside home: identify the file without publishing the
   // local directory layout.
-  return path.basename(s);
+  return path.posix.basename(toSlash(s));
 }
 
 /**

@@ -8,8 +8,9 @@ is shipped**.
 
 - **Preferred:** use GitHub private vulnerability reporting on the
   `Ganron007/Praxis` repository (Security tab → "Report a vulnerability").
-- **Email:** open an issue on GitHub marked `security` if private reporting is
-  unavailable.
+- **If private reporting is unavailable:** open a general issue requesting a
+  private contact channel. Do not include exploit details, affected secrets, or
+  a proof of concept in that public issue.
 
 ## Scope
 

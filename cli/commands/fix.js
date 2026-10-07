@@ -22,7 +22,7 @@ import {
   TEST_FILE_PATTERNS,
   MAX_FILE_SIZE
 } from '../utils/patterns.js';
-import { isHighEntropyMatch } from '../utils/entropy.js';
+import { isHighEntropyMatch, isDocumentedSecretExample } from '../utils/entropy.js';
 import fg from '../core/glob.js';
 import * as output from '../utils/output.js';
 
@@ -111,6 +111,7 @@ async function scanFile(filePath) {
         pattern.pattern.lastIndex = 0;
         let match;
         while ((match = pattern.pattern.exec(line)) !== null) {
+          if (isDocumentedSecretExample(pattern.name, match[0])) continue;
           if (pattern.requiresEntropyCheck && !isHighEntropyMatch(match[0])) continue;
           findings.push({
             line: lineNum + 1,

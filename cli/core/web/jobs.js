@@ -172,6 +172,8 @@ export async function runScanWithOrchestrator(rootPath, onProgress) {
     },
   });
 
+  if (agentResults.some(agent => !agent.success)) throw new Error('Scan incomplete: one or more agents failed');
+
   let score = 100;
   let grade = 'A';
   let categories = {};

@@ -17,6 +17,14 @@ and attribution as required.
 - **Source:** https://github.com/0x4D31/endpoint-ai-agent-abuse (v0.1.0)
 - **License:** CC0-1.0 (public domain dedication) — https://creativecommons.org/publicdomain/zero/1.0/
 
+## Documented non-working credential examples
+
+- **File:** `cli/data/documented-secret-examples.json`
+- **Source:** [AWS S3 authentication examples](https://docs.aws.amazon.com/AmazonS3/latest/developerguide/RESTAuthentication.html)
+- Contains one exact identifier AWS labels non-working, with our own annotations.
+  No documentation prose is reproduced. This is factual example provenance, not
+  permission to suppress arbitrary credentials, test files, or repository history.
+
 ## Standards referenced (not vendored)
 
 Findings are mapped to the following frameworks; their text is not reproduced:

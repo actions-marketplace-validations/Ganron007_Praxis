@@ -1,87 +1,29 @@
 ---
 name: praxis-scan
-description: Quick scan for leaked secrets — API keys, passwords, tokens, database URLs. Use when the user wants to check for hardcoded secrets or exposed credentials.
+description: Scan a directory for secret and code patterns and report findings without exposing credentials.
 argument-hint: "[path]"
 ---
 
-# Praxis — Secret Scan
+# praxis-scan
 
-You are scanning this project for leaked secrets using Praxis's pattern matching and entropy analysis engine.
+Use a preinstalled Praxis CLI 1.2.4 or newer; check `praxis --version`.
+Resolve the requested directory and pass arguments literally. `$ARGUMENTS`
+below is a placeholder for user-selected arguments, not shell code to evaluate.
+Keep stdout, stderr, and exit status separate. Never display credential values.
 
-## Step 1: Run the scan
-
-```bash
-npx praxis-sec@latest scan $ARGUMENTS --json 2>/dev/null
-```
-
-If `$ARGUMENTS` is empty, default to `.`:
+Use the pattern scanner, with the requested directory or `.`:
 
 ```bash
-npx praxis-sec@latest scan . --json 2>/dev/null
+praxis scan secrets . --json
 ```
 
-The command exits 0 if clean, 1 if secrets found. Capture stdout regardless.
+This command reports secret and code patterns without the full agent audit.
+It exits 1 when it finds issues or encounters a failure. Parse its flat JSON
+`findings` array and group it by file; distinguish operational errors using stderr and
+whether a valid report was produced. Do not describe an error as a clean scan.
 
-## Step 2: Parse the JSON output
-
-The JSON output has this structure:
-
-```json
-{
-  "filesScanned": 234,
-  "totalFindings": 5,
-  "clean": false,
-  "findings": [
-    {
-      "file": "src/config.js",
-      "findings": [
-        {
-          "line": 42,
-          "type": "Stripe Live Secret Key",
-          "severity": "critical",
-          "description": "Hardcoded Stripe live secret key found",
-          "matched": "sk_live_****"
-        }
-      ]
-    }
-  ]
-}
-```
-
-## Step 3: Report
-
-**If clean:** Confirm no secrets were found. Report how many files were scanned. This is good news!
-
-**If secrets found:**
-
-1. List each finding grouped by file:
-   - File path and line number
-   - Secret type (e.g., "AWS Access Key", "GitHub Token", "Database URL")
-   - Severity level
-2. **Never display actual secret values** — even partial matches should be referred to by type only
-3. If multiple secrets are in the same file, group them together
-
-## Step 4: Remediate
-
-For each secret found, offer to fix it:
-
-1. **Replace** the hardcoded secret with an environment variable reference:
-   - JavaScript/TypeScript: `process.env.VARIABLE_NAME`
-   - Python: `os.environ.get('VARIABLE_NAME')`
-   - Use a descriptive variable name based on the secret type (e.g., `STRIPE_SECRET_KEY`, `DATABASE_URL`)
-
-2. **Create or update `.env.example`** with placeholder values:
-   ```
-   STRIPE_SECRET_KEY=sk_live_your_key_here
-   DATABASE_URL=postgresql://user:password@host:5432/db
-   ```
-
-3. **Ensure `.env` is in `.gitignore`** — check and add if missing
-
-4. **Warn about git history** — if the secret was already committed, it exists in git history. Recommend:
-   - Rotating the credential immediately (mention `npx praxis-sec rotate`)
-   - Consider using `git filter-branch` or BFG Repo Cleaner to remove from history
-
-5. **Suggest auto-fix** — mention `/praxis-fix` for bulk remediation, or `/praxis-baseline` to baseline known findings
-
-Read the file and surrounding context before making any changes. Apply fixes only after presenting the findings, unless the user asked for auto-fix.
+Report file, line, pattern type and severity without credential values. If a
+complete scan finds no matches, state which directory/checks were scanned.
+Preview authorized source changes, move secrets to environment variables, keep
+real values out of `.env.example`, and rotate committed credentials. History
+rewriting needs a separate coordinated plan; it does not revoke a credential.
