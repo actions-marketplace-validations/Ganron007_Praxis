@@ -173,6 +173,83 @@ describe('release reliability', () => {
   });
 });
 
+describe('finding paths never leak the local filesystem', () => {
+  // Regression. `scan secrets` builds its own findings from the raw glob output, so
+  // it never passes through the orchestrator's normalisation and needed its own
+  // call. When the JSON formatter stopped stripping the drive letter — as part of
+  // removing the dogfood path strippers — this command silently began publishing
+  // the full absolute path, username and directory tree included. That is worse
+  // than what it replaced, and only a clean install of the built tarball surfaced
+  // it; `scan full` was already correct, so the unit tests never saw it.
+  const runsJson = (args, cwd) => {
+    const r = spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8', timeout: 30000 });
+    const start = r.stdout.search(/[[{]/);
+    assert.notEqual(start, -1, `${args.join(' ')} emitted no JSON:\n${r.stdout}\n${r.stderr}`);
+    return JSON.parse(r.stdout.slice(start));
+  };
+
+  it('reports repo-relative paths for every JSON-emitting command', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'praxis-leak-'));
+    try {
+      // Deliberately under the user's home, so a leaked absolute path is detectable.
+      fs.writeFileSync(path.join(root, 'app.js'),
+        'const AWS_KEY = "AKIAIOSFODNN7EXAMPLE";\nconst q = `SELECT * FROM u WHERE id=${req.query.id}`;\n');
+
+      const commands = [
+        ['scan full', ['scan', 'full', root, '--json', '--no-deps', '--no-cache', '--no-ai']],
+        ['scan secrets', ['scan', 'secrets', root, '--json']],
+        ['agents', ['agents', root, '--json']],
+      ];
+      // Only the scanners that must fire on this fixture. `agents` audits the AI
+      // agent surface, so on a machine without ~/.cursor/mcp.json it legitimately
+      // reports nothing — the leak property still has to hold, but requiring
+      // findings there made this test fail on CI for the wrong reason.
+      const MUST_FIRE = new Set(['scan full', 'scan secrets']);
+
+      let checked = 0;
+      for (const [label, args] of commands) {
+        const doc = runsJson(args, repo);
+        const files = (doc.findings || []).map(f => f.file).filter(Boolean);
+        if (MUST_FIRE.has(label)) {
+          assert.ok(files.length, `${label} produced no findings to check`);
+        }
+        checked += files.length;
+        for (const f of files) {
+          assert.ok(!/^[A-Za-z]:[\\/]/.test(f), `${label} published an absolute path: ${f}`);
+          assert.ok(!f.includes('..'), `${label} published an escaping path: ${f}`);
+          assert.ok(!f.includes(os.homedir()), `${label} leaked the home directory: ${f}`);
+        }
+      }
+      assert.ok(checked >= 2, `expected at least the fixture findings to be checked, got ${checked}`);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('renders a finding above the scan root as ~/…', () => {
+    // MCP_SHADOW_CONFIG reports the developer's own ~/.cursor/mcp.json when one
+    // exists. It must never be reported as a repo-relative file that does not
+    // exist, and must never carry the username. Skipped where the file is absent,
+    // which is the normal case on CI.
+    const home = os.homedir();
+    const shadow = path.join(home, '.cursor', 'mcp.json');
+    if (!fs.existsSync(shadow)) return;
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'praxis-shadow-'));
+    try {
+      fs.writeFileSync(path.join(root, 'app.js'), 'const a = 1;\n');
+      const doc = runsJson(['scan', 'full', root, '--json', '--no-deps', '--no-cache', '--no-ai'], repo);
+      const f = (doc.findings || []).find(x => x.rule === 'MCP_SHADOW_CONFIG');
+      if (!f) return;
+      assert.equal(f.file, '~/.cursor/mcp.json');
+      assert.ok(!JSON.stringify(doc).includes(home), 'report must not contain the home path');
+      assert.ok(!JSON.stringify(doc).includes(path.basename(home)),
+        'report must not contain the username');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('scanner discovery boundary', () => {
   it('does not import repository plugin code without explicit local trust', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'praxis-release-plugin-'));

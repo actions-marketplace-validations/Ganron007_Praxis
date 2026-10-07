@@ -39,6 +39,7 @@ import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
 import * as output from '../utils/output.js';
 import { CacheManager } from '../utils/cache-manager.js';
 import { isGitUrl, cloneGitRepo } from '../core/git-clone.js';
+import { displayPath } from '../core/paths.js';
 
 // =============================================================================
 // CUSTOM PATTERNS (.praxis.json)
@@ -231,7 +232,7 @@ export async function scanCommand(targetPath = '.', options = {}) {
     if (options.sarif) {
       console.log(renderSARIF(allResults, absolutePath));
     } else if (options.json) {
-      outputJSON(allResults, files.length);
+      outputJSON(allResults, files.length, absolutePath);
     } else {
       outputPretty(allResults, files.length, absolutePath);
     }
@@ -498,7 +499,7 @@ function outputPretty(results, filesScanned, rootPath) {
   output.summary(stats);
 }
 
-function outputJSON(results, filesScanned) {
+function outputJSON(results, filesScanned, rootPath) {
   const jsonOutput = {
     success: results.length === 0,
     filesScanned,
@@ -510,7 +511,11 @@ function outputJSON(results, filesScanned) {
     for (const f of findings) {
       jsonOutput.totalFindings++;
       jsonOutput.findings.push({
-        file,
+        // `results` is keyed by the raw absolute glob path, so this command never
+        // passes through the orchestrator's normalisation. Without it the JSON
+        // report published the absolute path, username and all — worse than the
+        // drive-letter stripping this replaced.
+        file: displayPath(file, rootPath),
         line: f.line,
         column: f.column,
         category: f.category || 'secret',

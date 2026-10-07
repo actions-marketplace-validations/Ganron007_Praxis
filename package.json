@@ -1,6 +1,6 @@
 {
   "name": "praxis-sec",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Praxis — From finding to fix, on autopilot. AI-native security CLI with 28 parallel agents covering AI / MCP / skill threats, OWASP LLM Top 10, multi-source supply-chain intel (OSV / GHSA / KEV / EPSS / NVD / Gitleaks + optional paid feeds), secret scanning, and an LLM-powered agentic remediation loop.",
   "main": "cli/index.js",
   "bin": {
