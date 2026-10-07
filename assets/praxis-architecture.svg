@@ -110,7 +110,7 @@
       <tspan fill="#ffffff" font-weight="800"> | ARCHITECTURE FLOW</tspan>
     </text>
     <text x="0" y="38" text-anchor="middle" font-family="'Segoe UI', -apple-system, sans-serif" font-size="15" font-weight="600" fill="#e9d5ff">
-      28-Agent Parallel Audit · AST Taint Dataflow · Executable Verification Ladder · Autonomous Fix
+      28-Agent Parallel Audit · AST Taint · Remote Git Scanning · 4-Tier Verification · Autonomous Fix
     </text>
   </g>
 
@@ -130,9 +130,9 @@
 
     <!-- Sub-bullets -->
     <g transform="translate(24, 60)">
-      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <strong>28 Concurrent Agents:</strong> Prompt Injection · MCP Abuse · Memory Poisoning · RAG · Pickles · Auth</text>
-      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <strong>AST &amp; Taint Engine:</strong> Pure ESM Babel (JS/TS) &amp; Python CST with ScopeTree &amp; Source-to-Sink Taint</text>
-      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#34d399">• <strong>100% Offline &amp; Free:</strong> 0 token cost, 125 secret &amp; code patterns, 7 cached Threat Intel feeds</text>
+      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <tspan font-weight="700">28 Concurrent Agents:</tspan> Prompt Injection · MCP Abuse · Memory Poisoning · RAG · Pickles · Auth</text>
+      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <tspan font-weight="700">AST &amp; Taint Engine:</tspan> Pure ESM Babel (JS/TS) &amp; Python CST with ScopeTree &amp; Source-to-Sink Taint</text>
+      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#34d399">• <tspan font-weight="700">100% Offline &amp; Free:</tspan> 0 token cost, 125 secret &amp; code patterns, 7 cached Threat Intel feeds</text>
     </g>
   </g>
 
@@ -159,9 +159,9 @@
 
     <!-- Sub-bullets -->
     <g transform="translate(24, 60)">
-      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <strong>8 Security Standards:</strong> OWASP LLM 2025 · MITRE ATLAS · NIST AI 600-1 · EU AI Act (Art 12/14) · ISO 42001</text>
-      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <strong>CycloneDX 1.5 ABOM:</strong> Full Agent Bill of Materials (Prompts, Tools, Models, Skills &amp; MCP Trust)</text>
-      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#38bdf8">• <strong>Scoring Engine:</strong> Computes 0–100 Health Score &amp; Letter Grade (A–F) with Category Deductions</text>
+      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <tspan font-weight="700">8 Security Standards:</tspan> OWASP LLM 2025 · MITRE ATLAS · NIST AI 600-1 · EU AI Act (Art 12/14) · ISO 42001</text>
+      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <tspan font-weight="700">CycloneDX 1.5 ABOM:</tspan> Full Agent Bill of Materials (Prompts, Tools, Models, Skills &amp; MCP Trust)</text>
+      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#38bdf8">• <tspan font-weight="700">Scoring Engine:</tspan> Computes 0–100 Health Score &amp; Letter Grade (A–F) with Category Deductions</text>
     </g>
   </g>
 
@@ -188,9 +188,9 @@
 
     <!-- Sub-bullets -->
     <g transform="translate(24, 60)">
-      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <strong>Multi-LLM Router:</strong> Anthropic Claude · OpenAI · DeepSeek · Google Gemini · Local Ollama (`--local`)</text>
-      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <strong>Exploitability Triage:</strong> Evaluates call-site reachability &amp; attack vectors to eliminate false alarms</text>
-      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#34d399">• <strong>Autonomous Code Fix:</strong> Drafts contextual, multi-file code patches &amp; unit regression tests</text>
+      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <tspan font-weight="700">Multi-LLM Router:</tspan> Anthropic Claude · OpenAI · DeepSeek · Google Gemini · Local Ollama (`--local`)</text>
+      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#f3e8ff">• <tspan font-weight="700">Exploitability Triage:</tspan> Evaluates call-site reachability &amp; attack vectors to eliminate false alarms</text>
+      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#34d399">• <tspan font-weight="700">Autonomous Code Fix:</tspan> Drafts contextual, multi-file code patches &amp; unit regression tests</text>
     </g>
   </g>
 
@@ -217,10 +217,10 @@
 
     <!-- Sub-bullets -->
     <g transform="translate(24, 60)">
-      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#a7f3d0">• <strong>Tier 1 (AST Syntax Oracle):</strong> Validates AST node integrity before any file is touched</text>
-      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#a7f3d0">• <strong>Tier 2 (Build Oracle):</strong> Executes project build (`npm run build` / `tsc`) to ensure 0 compiler errors</text>
-      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#a7f3d0">• <strong>Tier 3 (Test Suite Oracle):</strong> Runs unit test suite to guarantee zero functionality regressions</text>
-      <text x="0" y="92" font-family="sans-serif" font-size="14.5" font-weight="800" fill="#34d399">• <strong>Tier 4 (Re-scan Oracle):</strong> Confirms finding resolution — <strong>Auto-reverts on any oracle failure</strong></text>
+      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#a7f3d0">• <tspan font-weight="700">Tier 1 (AST Syntax Oracle):</tspan> Validates AST node integrity before any file is touched</text>
+      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#a7f3d0">• <tspan font-weight="700">Tier 2 (Build Oracle):</tspan> Executes project build (`npm run build` / `tsc`) to ensure 0 compiler errors</text>
+      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#a7f3d0">• <tspan font-weight="700">Tier 3 (Test Suite Oracle):</tspan> Runs unit test suite to guarantee zero functionality regressions</text>
+      <text x="0" y="92" font-family="sans-serif" font-size="14.5" font-weight="800" fill="#34d399">• <tspan font-weight="700">Tier 4 (Re-scan Oracle):</tspan> Confirms finding resolution — <tspan font-weight="700">Auto-reverts on any oracle failure</tspan></text>
     </g>
   </g>
 
@@ -247,9 +247,9 @@
 
     <!-- Sub-bullets -->
     <g transform="translate(24, 60)">
-      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#fef08a">• <strong>Interactive Diff Review:</strong> Developer inspects verified patch before any disk write</text>
-      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#fef08a">• <strong>Atomic Disk Apply:</strong> Atomic file replacement (`fs.rename` temp-swap) + Undo Log (`praxis undo`)</text>
-      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#38bdf8">• <strong>Assessment Report:</strong> single-file tabbed HTML — agent coverage, AST taint, ledger, trend</text>
+      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#fef08a">• <tspan font-weight="700">Interactive Diff Review:</tspan> Developer inspects verified patch before any disk write</text>
+      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#fef08a">• <tspan font-weight="700">Atomic Apply:</tspan> boundary + symlink checks, all-or-nothing rollback, hash-based `praxis undo`</text>
+      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#38bdf8">• <tspan font-weight="700">Assessment Report:</tspan> single-file tabbed HTML — agent coverage, AST taint, ledger, trend</text>
       <text x="0" y="92" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#34d399">• CI/CD Native: Net-new PR gating, SARIF export to GitHub Code Scanning &amp; PR annotations</text>
     </g>
   </g>
@@ -286,9 +286,9 @@
 
     <!-- Sub-bullets -->
     <g transform="translate(24, 60)">
-      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#bae6fd">• <strong>Web UI:</strong> <tspan fill="#7dd3fc">`praxis web`</tspan> — local browser UI, live SSE progress, loopback-only</text>
-      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#bae6fd">• <strong>Portable Rules:</strong> <tspan fill="#7dd3fc">`praxis rules export`</tspan> — 411 pattern rules as Semgrep YAML</text>
-      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#bae6fd">• <strong>Code Scanning:</strong> SARIF carries numeric <tspan fill="#7dd3fc">`security-severity`</tspan> so alerts rank properly</text>
+      <text x="0" y="16" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#bae6fd">• <tspan font-weight="700">Web UI:</tspan> <tspan fill="#7dd3fc">`praxis web`</tspan> — Security Studio, live SSE, loopback-only, secrets redacted</text>
+      <text x="0" y="42" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#bae6fd">• <tspan font-weight="700">Portable Rules:</tspan> <tspan fill="#7dd3fc">`praxis rules export`</tspan> — 411 pattern rules as Semgrep YAML</text>
+      <text x="0" y="68" font-family="sans-serif" font-size="14.5" font-weight="600" fill="#bae6fd">• <tspan font-weight="700">Code Scanning:</tspan> SARIF carries numeric <tspan fill="#7dd3fc">`security-severity`</tspan> so alerts rank properly</text>
       <text x="0" y="92" font-family="sans-serif" font-size="14.5" font-weight="700" fill="#34d399">• Reproducible: scan fingerprint + CI determinism gate over <tspan fill="#a7f3d0">`file::rule`</tspan> identities</text>
     </g>
   </g>

@@ -55,6 +55,7 @@
     "ai-defense/",
     "docs/",
     "!docs/internal/",
+    "assets/",
     "scripts/check-determinism.mjs",
     "README.md",
     "LICENSE"

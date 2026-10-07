@@ -507,6 +507,19 @@ describe('architecture diagram', async () => {
     }
   });
 
+  it('uses no HTML elements inside <text>, which render as nothing', () => {
+    // `<strong>` is an HTML element. Browsers parse <text> content as SVG, drop
+    // the unknown element and paint none of its children, so a bolded lead-in
+    // vanishes with no error and balanced tags. All 20 of this diagram's bullet
+    // lead-ins were affected until they became <tspan font-weight="700">.
+    const HTML_ONLY = /<(strong|em|b|i|u|s|small|sub|sup|code|div|p|br|span|mark|abbr)\b[^>]*>/i;
+    for (const m of svg.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)) {
+      const bad = m[1].match(HTML_ONLY);
+      assert.equal(bad, null,
+        `<text> contains HTML element <${bad && bad[1]}>; it will render as nothing. Use <tspan>.`);
+    }
+  });
+
   it('canvas height matches the background rect', () => {
     const vb = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)/);
     const bg = svg.match(/<rect width="(\d+)" height="(\d+)"/);
@@ -556,6 +569,19 @@ describe('architecture diagram', async () => {
     for (const needle of ['praxis web', 'praxis rules export', 'security-severity', 'fingerprint']) {
       assert.ok(visible.some(t => t.includes(needle)), `diagram omits "${needle}"`);
     }
+  });
+
+  it('shows both input surfaces and the current fix-safety guarantees', () => {
+    // A remote URL is a first-class input (`praxis scan git|repo <url>`), not a
+    // footnote, and the apply path no longer describes a bare temp-swap.
+    assert.ok(visible.some(t => /Remote Git Scanning/.test(t)),
+      'diagram omits remote Git scanning, which is a shipped input surface');
+    for (const needle of ['rollback', 'symlink']) {
+      assert.ok(visible.some(t => t.includes(needle)),
+        `diagram omits "${needle}", so the apply path reads as a bare file replace`);
+    }
+    assert.ok(!visible.some(t => /Atomic Disk Apply/.test(t)),
+      'diagram still describes the pre-1.2.1 apply path');
   });
 
   it('no bullet is longer than one already known to fit the same 780px card', () => {
