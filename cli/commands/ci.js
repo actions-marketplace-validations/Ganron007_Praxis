@@ -19,6 +19,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { displayPath } from '../core/paths.js';
 import { renderFindingsSARIF } from '../core/output/sarif.js';
 import { execFileSync } from 'child_process';
 import { buildOrchestrator } from '../agents/index.js';
@@ -181,7 +182,7 @@ export async function ciCommand(targetPath = '.', options = {}) {
       }])),
       ...(options.includeFindings ? {
         findings: allFindings.map(f => ({
-          file: path.relative(absolutePath, f.file).replace(/\\/g, '/'),
+          file: displayPath(f.file, absolutePath),
           line: f.line, rule: f.rule, severity: f.severity,
         })),
       } : {}),
@@ -203,7 +204,7 @@ export async function ciCommand(targetPath = '.', options = {}) {
     if (critical > 0) {
       console.log(`[praxis] Critical findings:`);
       for (const f of allFindings.filter(f => f.severity === 'critical').slice(0, 5)) {
-        const rel = path.relative(absolutePath, f.file).replace(/\\/g, '/');
+        const rel = displayPath(f.file, absolutePath);
         console.log(`  - ${f.rule} at ${rel}:${f.line}`);
       }
     }
@@ -274,7 +275,7 @@ function emitGitHubAnnotations(findings, rootPath) {
   if (process.env.GITHUB_ACTIONS !== 'true') return;
   for (const f of findings) {
     if (!f.file || !f.line) continue;
-    const rel = path.relative(rootPath, f.file).replace(/\\/g, '/');
+    const rel = displayPath(f.file, rootPath);
     const level = ['critical', 'high'].includes(f.severity) ? 'error' : 'warning';
     const col = f.column || 1;
     const escapeData = value => String(value).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
@@ -350,7 +351,7 @@ function postPRComment(scoreResult, findings, depVulns, rootPath, duration) {
     body += `### Critical & High Findings\n\n`;
     body += `| Severity | File | Issue |\n|----------|------|-------|\n`;
     for (const f of findings.filter(f => f.severity === 'critical' || f.severity === 'high').slice(0, 20)) {
-      const rel = path.relative(rootPath, f.file).replace(/\\/g, '/');
+      const rel = displayPath(f.file, rootPath);
       body += `| ${f.severity.toUpperCase()} | \`${rel}:${f.line}\` | ${(f.title || f.rule).slice(0, 60)} |\n`;
     }
     body += '\n';

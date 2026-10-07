@@ -13,6 +13,7 @@
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
+import { displayPath } from '../core/paths.js';
 import { execFileSync } from 'child_process';
 import { SKIP_DIRS, SKIP_EXTENSIONS, SKIP_FILENAMES, SECRET_PATTERNS, SECURITY_PATTERNS } from '../utils/patterns.js';
 import { isHighEntropyMatch, getConfidence } from '../utils/entropy.js';
@@ -358,7 +359,7 @@ async function watchStateful(absolutePath, options = {}) {
         const scoreColor = scoreResult.score >= 75 ? chalk.cyan : scoreResult.score >= 50 ? chalk.yellow : chalk.red;
         console.log(`  [${timestamp}] ${chalk.white(`${newFindings.length} new finding(s)`)}: Score ${scoreColor(`${scoreResult.score}/100`)}`);
         for (const f of newFindings.filter(f => f.severity === 'critical' || f.severity === 'high')) {
-          const relFile = path.relative(absolutePath, f.file || '');
+          const relFile = displayPath(f.file || '', absolutePath);
           const sev = f.severity === 'critical' ? chalk.red.bold('!!') : chalk.yellow(' !');
           console.log(`    ${sev} ${f.title} — ${relFile}:${f.line}`);
         }
@@ -375,7 +376,7 @@ async function watchStateful(absolutePath, options = {}) {
             provider: stats.provider,
             model: stats.model,
             findings: allFindings.map(f => ({
-              file: path.relative(absolutePath, f.file || ''),
+              file: displayPath(f.file || '', absolutePath),
               line: f.line,
               severity: f.severity,
               rule: f.rule,
@@ -498,7 +499,7 @@ async function watchDeep(absolutePath, options = {}) {
             ? { flagged: scoreResult.agenticSummary.flagged, total: scoreResult.agenticSummary.total }
             : null,
           findings: findings.map(f => ({
-            file: path.relative(absolutePath, f.file || ''),
+            file: displayPath(f.file || '', absolutePath),
             line: f.line,
             severity: f.severity,
             rule: f.rule,
@@ -519,7 +520,7 @@ async function watchDeep(absolutePath, options = {}) {
         console.log(`  [${timestamp}] ${chalk.white(`${findings.length} finding(s)`)}: ${criticals ? chalk.red.bold(`${criticals} critical`) : ''}${criticals && highs ? ', ' : ''}${highs ? chalk.yellow(`${highs} high`) : ''}. Score: ${scoreColor(`${scoreResult.score}/100 ${scoreResult.grade?.letter}`)}`);
 
         for (const f of findings.filter(f => f.severity === 'critical' || f.severity === 'high')) {
-          const relFile = path.relative(absolutePath, f.file || '');
+          const relFile = displayPath(f.file || '', absolutePath);
           const sev = f.severity === 'critical' ? chalk.red.bold('!!') : chalk.yellow(' !');
           const agentic = f.agenticRisk ? chalk.gray(` [${f.agenticRisk.id}]`) : '';
           console.log(`    ${sev} ${f.title} — ${relFile}:${f.line}${agentic}`);
@@ -671,7 +672,7 @@ async function postPRComments(findings, rootPath) {
   ).slice(0, 10); // Max 10 comments per scan
 
   for (const f of criticalOrHigh) {
-    const relFile = path.relative(rootPath, f.file).replace(/\\/g, '/');
+    const relFile = displayPath(f.file, rootPath);
     const body = [
       `**Praxis — ${f.severity.toUpperCase()} finding**`,
       '',

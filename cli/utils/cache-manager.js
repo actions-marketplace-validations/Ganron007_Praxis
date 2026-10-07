@@ -17,6 +17,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { displayPath } from '../core/paths.js';
 import crypto from 'crypto';
 import { toolVersion } from '../core/version.js';
 
@@ -200,7 +201,7 @@ export class CacheManager {
       // Group findings by file (relative paths)
       const lastFindings = {};
       for (const f of allFindings) {
-        const relPath = path.relative(this.rootPath, f.file).replace(/\\/g, '/');
+        const relPath = displayPath(f.file, this.rootPath);
         if (!lastFindings[relPath]) lastFindings[relPath] = [];
         // Store a lightweight copy (no absolute paths)
         lastFindings[relPath].push({

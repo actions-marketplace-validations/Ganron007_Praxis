@@ -149,6 +149,173 @@ describe('cli/core/output/json', async () => {
     const out = render('json', { findings: [] }, { pretty: false });
     assert.ok(!out.includes('\n'));
   });
+
+  it('passes finding paths through untouched', () => {
+    // The three strippers this replaced were written for this repository's own
+    // dogfooding and were wrong for every real user:
+    //   `^[a-zA-Z]:\/+`   turned `C:\Users\alice\.cursor\mcp.json` into
+    //                     `Users\alice\.cursor\mcp.json` — leaking the username
+    //                     and naming a repo-relative file that does not exist;
+    //   `/Praxis/…`       silently truncated any real path that merely contained
+    //   `/showcase-target/`  a directory called Praxis.
+    // Paths are now normalised against the scan root by the orchestrator
+    // (cli/core/paths.js), so this layer only has to unify separators.
+    const parsed = JSON.parse(render('json', {
+      findings: [
+        { severity: 'medium', file: '~/.cursor/mcp.json' },
+        { severity: 'medium', file: 'Praxis/src/nested/app.js' },
+        { severity: 'medium', file: 'showcase-target/app.js' },
+        { severity: 'medium' },
+      ],
+    }));
+    assert.equal(parsed.findings[0].file, '~/.cursor/mcp.json');
+    assert.equal(parsed.findings[1].file, 'Praxis/src/nested/app.js',
+      'a path containing a directory named Praxis must survive intact');
+    assert.equal(parsed.findings[2].file, 'showcase-target/app.js',
+      'the dogfooding showcase-target hack must no longer rewrite this');
+    assert.equal('file' in parsed.findings[3], false, 'must not invent a path');
+  });
+});
+
+// =============================================================================
+// core/paths.js
+// =============================================================================
+
+describe('cli/core/paths', async () => {
+  const { displayPath, normalizeFindingPaths } = await import('../core/paths.js');
+
+  it('presents a finding above the scan root as ~/…, not as a bogus relative path', () => {
+    // `MCP_SHADOW_CONFIG` reports the developer's own `~/.cursor/mcp.json`, which
+    // is the whole point of that finding. Both obvious renderings were wrong:
+    // `path.relative` produced `../../../Users/<name>/…` — leaking the username
+    // and the tree depth into a report that gets pasted into CI — and stripping
+    // the drive letter produced `Users/<name>/.cursor/mcp.json`, which leaks the
+    // username and names a repo-relative file that does not exist.
+    const home = os.homedir();
+    const outside = path.join(home, '.cursor', 'mcp.json');
+    const root = path.join(home, 'projects', 'myapp');
+    const shown = displayPath(outside, root);
+    assert.equal(shown, '~/.cursor/mcp.json');
+    assert.ok(!shown.includes(path.basename(home)), 'must not leak the local username');
+    assert.ok(!shown.includes('..'), 'must not escape the root');
+  });
+
+  it('renders in-root files relative and out-of-home files as a bare name', () => {
+    const root = path.join(path.sep, 'srv', 'app');
+    assert.equal(displayPath(path.join(root, 'src', 'db.js'), root), 'src/db.js');
+    // Outside both the root and home: identify the file without the layout.
+    assert.equal(displayPath(path.join(path.sep, 'etc', 'passwd'), root), 'passwd');
+  });
+
+  it('passes an already-relative path through unchanged and is idempotent', () => {
+    const root = path.join(path.sep, 'srv', 'app');
+    const rel = 'src/nested/deep.js';
+    assert.equal(displayPath(rel, root), rel);
+    // A second pass must not mangle what the first produced. This is what keeps
+    // `~/…` stable as a finding passes the orchestrator and then each renderer.
+    assert.equal(displayPath(displayPath(rel, root), root), rel);
+    assert.equal(displayPath('~/.cursor/mcp.json', root), '~/.cursor/mcp.json');
+    for (const empty of [undefined, null, '']) {
+      assert.equal(displayPath(empty, root), empty);
+    }
+  });
+
+  it('no command may relativise a finding path with path.relative', () => {
+    // Structural guard, and the guard that matters most here. Findings arrive
+    // display-ready from the orchestrator, so every renderer must use
+    // displayPath. `path.relative(root, 'src/db.js')` resolves that relative input
+    // against the process cwd: scanning a directory that was not the cwd printed
+    // `../../src/db.js`. Only remediate.js is exempt — its plan items are
+    // absolute by contract (see the note at its line 154).
+    const COMMANDS_DIR = path.join(
+      path.dirname(fileURLToPath(import.meta.url)), '..', 'commands',
+    );
+    const offenders = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (p.endsWith('.js') && path.basename(p) !== 'remediate.js') {
+          fs.readFileSync(p, 'utf8').split('\n').forEach((l, i) => {
+            if (/path\.relative\(\s*[\w.()]+,\s*[\w]+\.file/.test(l)) {
+              offenders.push(`${path.basename(p)}:${i + 1}`);
+            }
+          });
+        }
+      }
+    };
+    walk(COMMANDS_DIR);
+    assert.deepEqual(offenders, [],
+      `use displayPath(finding.file, root): ${offenders.join(', ')}`);
+  });
+
+  it('treats a foreign-platform absolute path as absolute', () => {
+    // `path.isAbsolute('C:/work/src/a.js')` is false on POSIX, where that string
+    // is a legal relative filename. Without the drive-letter guard a Windows path
+    // read back from a report or a cache would be printed verbatim on Linux —
+    // drive letter and all. Found the hard way: a test fixture hardcoding
+    // `C:/…` passed on Windows and failed on every CI runner.
+    const root = path.join(path.sep, 'srv', 'app');
+    assert.equal(displayPath('C:/work/src/a.js', root), 'a.js');
+    assert.equal(displayPath('C:/work/src/a.js'), 'a.js');
+  });
+
+  it('no file may re-inline the path strippers this replaced', () => {
+    // The bug existed because these three rules were copy-pasted into five places:
+    // cli/core/output/json.js, cli/commands/audit.js (twice — once in outputJSON
+    // and once via the secret scan), cli/agents/html-reporter.js,
+    // cli/commands/openclaw.js and cli/commands/scan-standard.js. Each fix left
+    // the others behind, which is how a secret finding still shipped with its
+    // drive letter stripped and the username attached. One owner, guarded.
+    const CLI_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+    // The exact dogfood shapes, not a loose `/Praxis/` search: sarif.js keeps a
+    // legitimate rootless fallback using `^[a-zA-Z]:\/*`, which is a different
+    // regex from the `^[a-zA-Z]:\/+` form that did the damage.
+    const BANNED = [
+      /\^\[a-zA-Z\]:\\\/\+/,          // `^[a-zA-Z]:\/+`  drive-letter strip
+      /Praxis\\\/showcase-target/,   // `/Praxis\/showcase-target/`
+      /Praxis\\\/\)/,                // `/Praxis\/`
+    ];
+    const offenders = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== '__tests__' && e.name !== 'node_modules') walk(p);
+        } else if (p.endsWith('.js')) {
+          fs.readFileSync(p, 'utf8').split('\n').forEach((l, i) => {
+            // Prose about the bug is allowed; only executable lines are policed.
+            const t = l.trim();
+            if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
+            if (BANNED.some(re => re.test(l))) {
+              offenders.push(`${path.relative(CLI_DIR, p)}:${i + 1}`);
+            }
+          });
+        }
+      }
+    };
+    walk(CLI_DIR);
+    assert.deepEqual(offenders, [],
+      `use displayPath from cli/core/paths.js: ${offenders.join(', ')}`);
+  });
+
+  it('normalises a mixed finding list without disturbing the others', () => {
+    const home = os.homedir();
+    const root = path.join(home, 'projects', 'myapp');
+    const findings = [
+      { rule: 'A', file: path.join(root, 'src', 'a.js') },
+      { rule: 'B', file: path.join(home, '.cursor', 'mcp.json') },
+      { rule: 'C' },                        // no file: must not gain one
+      { rule: 'D', file: 'cli/agents/x.js' },
+      null,
+    ];
+    const out = normalizeFindingPaths(findings, root);
+    assert.equal(out[0].file, 'src/a.js');
+    assert.equal(out[1].file, '~/.cursor/mcp.json');
+    assert.equal('file' in out[2], false, 'must not invent a path');
+    assert.equal(out[3].file, 'cli/agents/x.js');
+    assert.equal(out[4], null, 'must not throw on a null entry');
+  });
 });
 
 // =============================================================================

@@ -33,6 +33,7 @@ import { buildScanFingerprint, fingerprintLine } from '../utils/scan-fingerprint
 import { readFixLedger, summarizeFixLedger, isReversible } from '../utils/fix-ledger.js';
 import { readScoreHistory, summarizeHistory } from '../utils/score-history.js';
 import { toolVersion } from '../core/version.js';
+import { displayPath } from '../core/paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_VERSION = toolVersion();
@@ -44,13 +45,12 @@ export class HTMLReporter {
   }
 
   normalizePath(filePath, rootPath) {
-    if (!filePath) return '';
-    const norm = String(filePath).replace(/\\/g, '/');
-    const normRoot = rootPath ? String(rootPath).replace(/\\/g, '/') : '';
-    if (normRoot && norm.startsWith(normRoot)) {
-      return norm.slice(normRoot.length).replace(/^\/+/, '');
-    }
-    return norm.replace(/^[a-zA-Z]:\/+/, '').replace(/^.*\/Praxis\/showcase-target\//, '').replace(/^.*\/showcase-target\//, '');
+    // Paths reach the reporter already normalised by the orchestrator, so this only
+    // has to fall back for callers that build findings themselves. The strippers
+    // that used to live here leaked the username into every HTML report and
+    // truncated any real path containing a directory called `Praxis` — see
+    // cli/core/paths.js.
+    return displayPath(filePath, rootPath);
   }
 
   /**

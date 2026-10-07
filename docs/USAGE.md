@@ -961,7 +961,7 @@ only ever emits a known class name.
 prints a provenance line in its footer:
 
 ```
-praxis 1.2.1 · node v24.14.1 · probes v1.1(23) · threatpack v1.1(3) · eaa v0.1.0 · files 214
+praxis 1.2.2 · node v24.14.1 · probes v1.1(23) · threatpack v1.1(3) · eaa v0.1.0 · files 215
 ```
 
 It records the tool version, the runtime, and the version of every vendored data asset

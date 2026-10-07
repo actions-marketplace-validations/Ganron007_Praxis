@@ -6,8 +6,11 @@
  *
  * Scanner hardening: secret-category findings never expose their raw
  * matched value — `matched` is redacted centrally so no consumer of the
- * JSON report can leak a credential.
+ * JSON report can leak a credential. Finding paths are normalised against the scan
+ * root by the orchestrator, so no consumer can receive an absolute path either.
  */
+
+import path from 'path';
 
 const SCHEMA_VERSION = 3;
 
@@ -22,11 +25,16 @@ function redactFinding(f) {
       : String(f.matched).slice(0, 160);
   }
   if (out.file) {
-    out.file = String(out.file)
-      .replace(/\\/g, '/')
-      .replace(/^[a-zA-Z]:\/+/, '')
-      .replace(/^.*\/Praxis\/showcase-target\//, 'showcase-target/')
-      .replace(/^.*\/Praxis\//, '');
+    // Paths arrive already normalised against the scan root by the orchestrator,
+    // so this only has to unify separators. The three strippers that used to live
+    // here were wrong for everyone but this repository:
+    //   `^[a-zA-Z]:\/+`  turned `C:\Users\alice\.cursor\mcp.json` into
+    //                   `Users/alice/.cursor/mcp.json` — leaking the username and
+    //                   naming a repo-relative file that does not exist;
+    //   the two `/Praxis/` rules were dogfooding hacks that silently truncated any
+    //                   real path merely containing a directory called `Praxis`.
+    // See cli/core/paths.js for the replacement.
+    out.file = String(out.file).split(path.sep).join('/').replace(/\\/g, '/');
   }
   return out;
 }

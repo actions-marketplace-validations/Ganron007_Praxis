@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { displayPath } from '../core/paths.js';
 import { buildOrchestrator } from '../agents/index.js';
 import { SECRET_PATTERNS, SKIP_DIRS, SKIP_EXTENSIONS, SKIP_FILENAMES, MAX_FILE_SIZE } from '../utils/patterns.js';
 import { isHighEntropyMatch } from '../utils/entropy.js';
@@ -28,7 +29,7 @@ const BASELINE_FILE = '.praxis/baseline.json';
  * Uses rule + relative file path + first 40 chars of matched text.
  */
 function fingerprint(finding, rootPath) {
-  const relFile = path.relative(rootPath, finding.file || '').replace(/\\/g, '/');
+  const relFile = displayPath(finding.file || '', rootPath);
   const matched = (finding.matched || '').slice(0, 40);
   return `${finding.rule}:${relFile}:${matched}`;
 }

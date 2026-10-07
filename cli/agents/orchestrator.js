@@ -18,6 +18,7 @@
 import path from 'path';
 import ora from 'ora';
 import chalk from 'chalk';
+import { normalizeFindingPaths } from '../core/paths.js';
 import { ReconAgent } from './recon-agent.js';
 import { VerifierAgent } from './verifier-agent.js';
 import { DeepAnalyzer } from './deep-analyzer.js';
@@ -292,6 +293,20 @@ export class Orchestrator {
     allFindings.sort((a, b) =>
       (sevOrder[a.severity] ?? 4) - (sevOrder[b.severity] ?? 4)
     );
+
+    // ── 11. Render every path for display, once ────────────────────────────────
+    // The terminal table, the HTML and JSON reports, CI annotations and SARIF all
+    // read this same `finding.file`. An agent may legitimately report a file above
+    // the scan root — MCP_SHADOW_CONFIG reads the developer's own
+    // `~/.cursor/mcp.json`, which is the point of the finding. Left absolute, the
+    // terminal printed `../../../../Users/<name>/.cursor/mcp.json` and the reports
+    // printed `Users/<name>/.cursor/mcp.json`: the username leaked into output
+    // that gets pasted into CI, and the path looked repo-relative while not
+    // existing. `displayPath` makes it `~/.cursor/mcp.json` in every surface, and
+    // identically on every machine, so a self-scan's finding identities do not
+    // shift between developers. `fix` and `remediate` build their own absolute
+    // paths, so no write is redirected by this.
+    normalizeFindingPaths(allFindings, absolutePath);
 
     return { recon, findings: allFindings, agentResults };
   }

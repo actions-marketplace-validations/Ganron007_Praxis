@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { displayPath } from '../core/paths.js';
 import { buildOrchestrator } from '../agents/index.js';
 import { ScoringEngine } from '../agents/scoring-engine.js';
 import { runDepsAudit } from './deps.js';
@@ -215,7 +216,7 @@ export async function vibeCheckCommand(targetPath = '.', options = {}) {
       })
       .slice(0, 3);
     for (const f of top) {
-      const rel = path.relative(absolutePath, f.file).replace(/\\/g, '/');
+      const rel = displayPath(f.file, absolutePath);
       console.log(`    ${SEV_EMOJI[f.severity] || '⚪'} ${f.title || f.rule} ${chalk.gray(`(${rel}:${f.line})`)}`);
     }
     console.log();

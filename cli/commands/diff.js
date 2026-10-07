@@ -16,6 +16,7 @@ import { execFileSync } from 'child_process';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { displayPath } from '../core/paths.js';
 import { SECRET_PATTERNS, SECURITY_PATTERNS, SKIP_EXTENSIONS, SKIP_FILENAMES } from '../utils/patterns.js';
 import { buildOrchestrator } from '../agents/index.js';
 import { ScoringEngine } from '../agents/scoring-engine.js';
@@ -165,7 +166,7 @@ export async function diffCommand(ref, options) {
       const sevColor = f.severity === 'critical' ? chalk.red :
                         f.severity === 'high' ? chalk.yellow :
                         f.severity === 'medium' ? chalk.cyan : chalk.gray;
-      const relPath = path.relative(absolutePath, f.file);
+      const relPath = displayPath(f.file, absolutePath);
       console.log(`  ${sevColor(`[${f.severity.toUpperCase()}]`)} ${chalk.white(f.title)}`);
       console.log(chalk.gray(`    ${relPath}:${f.line} → ${f.fix || f.description}`));
       shown++;

@@ -19,6 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { displayPath } from '../core/paths.js';
 import { LegalRiskAgent } from '../agents/legal-risk-agent.js';
 import * as output from '../utils/output.js';
 
@@ -136,7 +137,7 @@ export async function legalCommand(targetPath = '.', options = {}) {
       const riskLabel = RISK_LABELS[riskKey] || riskKey;
 
       console.log(`  ${sevBadge}  ${chalk.white.bold(f.title)}`);
-      console.log(`          ${riskColor(`[${riskLabel}]`)}  ${chalk.gray(path.relative(absolutePath, f.file) || f.file)}`);
+      console.log(`          ${riskColor(`[${riskLabel}]`)}  ${chalk.gray(displayPath(f.file, absolutePath))}`);
       console.log();
       console.log(`          ${chalk.gray(f.description)}`);
       console.log();

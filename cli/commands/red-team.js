@@ -18,6 +18,7 @@ import path from 'path';
 import { renderFindingsSARIF } from '../core/output/sarif.js';
 import chalk from 'chalk';
 import ora from 'ora';
+import { displayPath } from '../core/paths.js';
 import { buildOrchestratorAsync } from '../agents/index.js';
 import { SwarmOrchestrator } from '../agents/swarm-orchestrator.js';
 import { ReconAgent } from '../agents/recon-agent.js';
@@ -267,7 +268,7 @@ function printResults(scoreResult, findings, recon, agentResults, depVulns, root
     console.log(chalk.yellow('  ' + '─'.repeat(58)));
 
     for (const f of findings.slice(0, 20)) {
-      const relFile = path.relative(rootPath, f.file).replace(/\\/g, '/');
+      const relFile = displayPath(f.file, rootPath);
       const sevColor = SEV_COLOR[f.severity] || chalk.white;
       const aiTag = f.aiClassification === 'FALSE_POSITIVE'
         ? chalk.gray(' [FP]')

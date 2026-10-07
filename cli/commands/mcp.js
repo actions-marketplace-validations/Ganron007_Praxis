@@ -34,6 +34,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { displayPath } from '../core/paths.js';
 import fg from '../core/glob.js';
 import { SECRET_PATTERNS, SKIP_DIRS, SKIP_EXTENSIONS, SKIP_FILENAMES, TEST_FILE_PATTERNS, MAX_FILE_SIZE } from '../utils/patterns.js';
 import { isHighEntropyMatch } from '../utils/entropy.js';
@@ -313,7 +314,7 @@ async function scanRepo({ path: targetPath, agents: agentFilter, llm = false, ou
         severity:      f.severity,
         category:      f.category,
         rule:          f.rule,
-        file:          f.file ? path.relative(rootPath, f.file) : null,
+        file:          f.file ? displayPath(f.file, rootPath) : null,
         line:          f.line,
         description:   f.description,
         remediation:   f.remediation,

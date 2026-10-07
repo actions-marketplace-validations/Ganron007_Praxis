@@ -21,6 +21,7 @@ import path from 'path';
 import os from 'os';
 import { BaseAgent } from './base-agent.js';
 import { lookupTrust, listKnown } from '../utils/mcp-trust.js';
+import { displayPath } from '../core/paths.js';
 
 // =============================================================================
 // MCP SECURITY PATTERNS
@@ -551,13 +552,18 @@ export class MCPSecurityAgent extends BaseAgent {
           const serverCount = Object.keys(servers).length;
 
           if (serverCount > 0) {
+            // The absolute home path must not reach the report: it names the user
+            // and prints the local directory layout into output that gets pasted
+            // into CI comments. `~/.cursor/mcp.json` says everything the finding
+            // needs and is identical on every machine.
+            const where = displayPath(configPath);
             findings.push({
               file: configPath, line: 1, column: 0,
               severity: 'medium',
               category: this.category,
               rule: 'MCP_SHADOW_CONFIG',
               title: `MCP: ${serverCount} Shadow Server(s) in User Config`,
-              description: `Found ${serverCount} MCP server(s) configured outside the project in ${configPath}. These operate outside your project's security controls.`,
+              description: `Found ${serverCount} MCP server(s) configured outside the project in ${where}. These operate outside your project's security controls.`,
               matched: Object.keys(servers).join(', '),
               confidence: 'medium',
               cwe: 'CWE-269',

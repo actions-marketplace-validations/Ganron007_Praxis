@@ -17,6 +17,7 @@ import path from 'path';
 import { renderFindingsSARIF } from '../core/output/sarif.js';
 import chalk from 'chalk';
 import ora from 'ora';
+import { displayPath } from '../core/paths.js';
 import fg from '../core/glob.js';
 import { buildOrchestrator, buildOrchestratorAsync } from '../agents/index.js';
 import { LegalRiskAgent } from '../agents/legal-risk-agent.js';
@@ -158,7 +159,9 @@ export async function auditCommand(targetPath = '.', options = {}) {
       const fileResults = scanFileForSecrets(file);
       for (const f of fileResults) {
         secretFindings.push({
-          file,
+          // Normalised here so secret findings are indistinguishable from agent
+          // findings by the time anything renders them.
+          file: displayPath(file, absolutePath),
           line: f.line,
           column: f.column,
           severity: f.severity,
@@ -486,7 +489,7 @@ export async function auditCommand(targetPath = '.', options = {}) {
   } else if (options.md) {
     outputMarkdown(scoreResult, filteredFindings, depVulns, remediationPlan, absolutePath);
   } else if (options.json) {
-    outputJSON(scoreResult, filteredFindings, depVulns, recon, agentResults, remediationPlan, suppressions, options.compare ? scoringEngine.loadHistory(absolutePath) : null, filesScanned);
+    outputJSON(scoreResult, filteredFindings, depVulns, recon, agentResults, remediationPlan, suppressions, options.compare ? scoringEngine.loadHistory(absolutePath) : null, filesScanned, absolutePath);
   } else if (options.sarif) {
     outputSARIF(filteredFindings, absolutePath);
   } else {
@@ -709,7 +712,7 @@ function buildRemediationPlan(findings, depVulns, rootPath) {
     const nonEnvSecrets = [];
 
     for (const f of sevSecrets) {
-      const relFile = path.relative(rootPath, f.file).replace(/\\/g, '/');
+      const relFile = displayPath(f.file, rootPath);
       if (f.file.match(/\.env(\..*)?$/)) {
         if (!envGroups.has(relFile)) envGroups.set(relFile, []);
         envGroups.get(relFile).push(f);
@@ -741,7 +744,7 @@ function buildRemediationPlan(findings, depVulns, rootPath) {
         category: 'secrets',
         categoryLabel: 'SECRETS',
         title: f.title || f.rule,
-        file: `${path.relative(rootPath, f.file).replace(/\\/g, '/')}:${f.line}`,
+        file: `${displayPath(f.file, rootPath)}:${f.line}`,
         action: f.aiFix || f.fix || f.description,
         effort: 'low',
       });
@@ -755,7 +758,7 @@ function buildRemediationPlan(findings, depVulns, rootPath) {
         category: f.category,
         categoryLabel: (CATEGORY_LABELS[f.category] || f.category).toUpperCase(),
         title: f.title || f.rule,
-        file: `${path.relative(rootPath, f.file).replace(/\\/g, '/')}:${f.line}`,
+        file: `${displayPath(f.file, rootPath)}:${f.line}`,
         action: f.aiFix || f.fix || f.description,
         effort: EFFORT_MAP[f.category] || 'medium',
       });
@@ -880,7 +883,7 @@ function printReport(scoreResult, findings, depVulns, recon, plan, rootPath, fil
 // JSON OUTPUT
 // =============================================================================
 
-function outputJSON(scoreResult, findings, depVulns, recon, agentResults, remediationPlan, suppressions, history, filesScanned = null) {
+function outputJSON(scoreResult, findings, depVulns, recon, agentResults, remediationPlan, suppressions, history, filesScanned = null, absolutePath = process.cwd()) {
   const output = {
     score: scoreResult.score,
     grade: scoreResult.grade.letter,
@@ -896,13 +899,14 @@ function outputJSON(scoreResult, findings, depVulns, recon, agentResults, remedi
       }])
     ),
     findings: findings.map(f => {
-      const normFile = String(f.file || '')
-        .replace(/\\/g, '/')
-        .replace(/^[a-zA-Z]:\/+/, '')
-        .replace(/^.*\/Praxis\/showcase-target\//, 'showcase-target/')
-        .replace(/^.*\/Praxis\//, '');
       return {
-        file: normFile, line: f.line, severity: f.severity, category: f.category,
+        // Secret findings are built here rather than by an agent, so they never
+        // pass through the orchestrator's normalisation. Do it at the source —
+        // see cli/core/paths.js. This used to be the fourth copy of the same
+        // strippers, which is how an absolute path reached the JSON report with
+        // its drive letter removed and the username left behind.
+        file: displayPath(f.file, absolutePath),
+        line: f.line, severity: f.severity, category: f.category,
         rule: f.rule, title: f.title, description: f.description, fix: f.fix,
         cwe: f.cwe, owasp: f.owasp,
         ...(f.eaa ? { eaa: f.eaa } : {}),
@@ -1102,7 +1106,7 @@ function outputCSV(findings, depVulns, scoreResult, rootPath) {
 
   console.log('severity,category,rule,file,line,title,description,fix');
   for (const f of findings) {
-    const relFile = path.relative(rootPath, f.file).replace(/\\/g, '/');
+    const relFile = displayPath(f.file, rootPath);
     console.log([
       escape(f.severity), escape(f.category), escape(f.rule),
       escape(relFile), f.line || '', escape(f.title),
@@ -1152,7 +1156,7 @@ function outputMarkdown(scoreResult, findings, depVulns, remediationPlan, rootPa
     lines.push('| File | Rule | Description | Fix |');
     lines.push('|------|------|-------------|-----|');
     for (const f of sevFindings) {
-      const relFile = path.relative(rootPath, f.file).replace(/\\/g, '/');
+      const relFile = displayPath(f.file, rootPath);
       lines.push(`| ${relFile}:${f.line} | ${f.rule} | ${(f.description || '').slice(0, 80)} | ${(f.fix || '').slice(0, 60)} |`);
     }
     lines.push('');
