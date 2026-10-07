@@ -341,7 +341,7 @@ function outputJSON(scoreResult, findings, recon, agentResults) {
 /**
  * SARIF for GitHub Code Scanning.
  *
- * Delegates to the shared serializer in `cli/core/output/sarif.js` (P-IMP-062); this was
+ * Delegates to the shared serializer in `cli/core/output/sarif.js`; this was
  * a private copy hardcoding a driver version of `4.0.0` and carrying no
  * `security-severity`.
  */

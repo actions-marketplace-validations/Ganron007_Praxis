@@ -33,7 +33,7 @@
       "severity": "medium",
       "description": "Source contains split-payload markers that chain instructions across documents/messages — the payload-splitting technique that defeats per-input content filters.",
       "fix": "Evaluate documents independently; do not concatenate instruction-like text across untrusted sources.",
-      "_tightened": "P-IMP-057: the bare phrase \"when combined with\" matched ordinary English (e.g. the comment \"when combined with machine output\") and produced a medium-severity finding. It now requires a chaining referent (above/previous/preceding/earlier/these/prior/other) AND an instruction-like noun, so benign prose like \"merged when combined with the previous version\" no longer matches."
+      "_tightened": "The bare phrase \"when combined with\" matched ordinary English (e.g. the comment \"when combined with machine output\") and produced a medium-severity finding. It now requires a chaining referent (above/previous/preceding/earlier/these/prior/other) AND an instruction-like noun, so benign prose like \"merged when combined with the previous version\" no longer matches."
     }
   ],
   "eaa": [],

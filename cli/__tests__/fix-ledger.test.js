@@ -1,5 +1,5 @@
 /**
- * Tests for cli/utils/fix-ledger.js and the Remediation Ledger panel (P-IMP-054).
+ * Tests for cli/utils/fix-ledger.js and the Remediation Ledger panel.
  *
  * The ledger exists so the report can show the applied half of the find→fix→verify
  * loop rather than only the findings. The tests pin the semantics that are easy to

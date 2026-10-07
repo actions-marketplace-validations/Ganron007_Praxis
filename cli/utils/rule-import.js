@@ -1,5 +1,5 @@
 /**
- * Portable rule import — the inverse of the export (P-IMP-060).
+ * Portable rule import — the inverse of the export.
  * ============================================================================
  *
  * Deliberately scoped, and the scope matters:

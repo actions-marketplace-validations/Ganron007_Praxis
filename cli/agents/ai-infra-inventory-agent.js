@@ -115,7 +115,7 @@ const FRAMEWORK_ROUTE_RE = [
 const BOLA_SEGMENT = /[\/{][^{}\/]*(?:\{|:)[a-zA-Z_][a-zA-Z0-9_]*[\}][^{}\/]*/;
 
 // =============================================================================
-// LANE 4 — AI DATA PIPELINES & EVAL HARNESSES (P-IMP-046..048)
+// LANE 4 — AI DATA PIPELINES & EVAL HARNESSES
 // =============================================================================
 // Vectors from the July 2026 OpenAI–Hugging Face autonomous-agent incident:
 // remote-code dataset loaders and dataset template injection (initial access),
@@ -393,7 +393,7 @@ export class AiInfraInventoryAgent extends BaseAgent {
       if (!content) continue;
       const rel = path.relative(rootPath, file).replace(/\\/g, '/');
 
-      // Remote-code dataset loader (P-IMP-046)
+      // Remote-code dataset loader
       const dataset_remote_loader_line = DATASET_REMOTE_LOADER.test(content) ? realMatchLine(content, DATASET_REMOTE_LOADER) : 0;
       if (dataset_remote_loader_line) {
         findings.push(createFinding({
@@ -412,7 +412,7 @@ export class AiInfraInventoryAgent extends BaseAgent {
         }));
       }
 
-      // Unsafe trust_remote_code flag (P-IMP-046 companion)
+      // Unsafe trust_remote_code flag (companion)
       const unsafe_dataset_flag_line = UNSAFE_DATASET_FLAG.test(content) ? realMatchLine(content, UNSAFE_DATASET_FLAG) : 0;
       if (unsafe_dataset_flag_line) {
         findings.push(createFinding({
@@ -431,7 +431,7 @@ export class AiInfraInventoryAgent extends BaseAgent {
         }));
       }
 
-      // Template injection in dataset config (P-IMP-047)
+      // Template injection in dataset config
       const dataset_template_injection_line = DATASET_TEMPLATE_INJECTION.test(content) ? realMatchLine(content, DATASET_TEMPLATE_INJECTION) : 0;
       if (dataset_template_injection_line) {
         findings.push(createFinding({
@@ -450,7 +450,7 @@ export class AiInfraInventoryAgent extends BaseAgent {
         }));
       }
 
-      // Eval-harness / sandbox misconfigurations (P-IMP-048)
+      // Eval-harness / sandbox misconfigurations
       for (const check of EVAL_HARNESS_RISK) {
         const harness_line = check.regex.test(content) ? realMatchLine(content, check.regex) : 0;
         if (harness_line) {

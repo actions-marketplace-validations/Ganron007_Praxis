@@ -2,7 +2,7 @@
  * Shared HTML report theme — single source of truth for every Praxis HTML surface.
  * ============================================================================
  *
- * Extracted (P-IMP-051c) because `cli/agents/html-reporter.js` and
+ * Extracted because `cli/agents/html-reporter.js` and
  * `cli/commands/team-report.js` each carried their own ~100-line inline stylesheet
  * and their own severity palette. Those palettes had already drifted
  * (`critical` was `#ef4444` in one and `#dc2626` in the other), so every brand or

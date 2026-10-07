@@ -8,7 +8,7 @@
  * The manifest is the important half. A bundle without it would imply Praxis is
  * nothing but its patterns; the manifest names the layers that have no Semgrep
  * equivalent (AST/taint, the probe corpus, entropy heuristics). See
- * docs/ and P-IMP-059 in the improvement plan.
+ * docs/USAGE.md.
  */
 
 import path from 'path';

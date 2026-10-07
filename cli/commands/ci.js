@@ -213,7 +213,7 @@ export async function ciCommand(targetPath = '.', options = {}) {
     }
   }
 
-  // ── GitHub PR Inline Annotations (P-IMP-044) ───────────────────────────
+  // ── GitHub PR Inline Annotations ───────────────────────────
   emitGitHubAnnotations(allFindings, absolutePath);
 
   // ── GitHub PR Comment ──────────────────────────────────────────────────
@@ -289,7 +289,7 @@ function emitGitHubAnnotations(findings, rootPath) {
 /**
  * SARIF for GitHub Code Scanning.
  *
- * Delegates to the shared serializer in `cli/core/output/sarif.js` (P-IMP-062). This
+ * Delegates to the shared serializer in `cli/core/output/sarif.js`. This
  * used to be a private copy, which is why the GitHub Action's SARIF carried no
  * `security-severity` at all — the fix landed in the registry and never reached here.
  *

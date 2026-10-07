@@ -1,5 +1,5 @@
 /**
- * Tests for cli/utils/scan-fingerprint.js (P-IMP-053).
+ * Tests for cli/utils/scan-fingerprint.js.
  *
  * Added after a self-scan reported 325 findings where four subsequent scans of the
  * identical tree reported 308, and the extra 17 could not be attributed to data

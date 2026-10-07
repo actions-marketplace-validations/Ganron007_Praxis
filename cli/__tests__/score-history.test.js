@@ -1,5 +1,5 @@
 /**
- * Tests for cli/utils/score-history.js and the trend panel (P-IMP-055).
+ * Tests for cli/utils/score-history.js and the trend panel.
  *
  * The rule these pin is "do not overstate the data". An empty chart reads as
  * "flat, no change", which is a different claim from "we have no data" — so the

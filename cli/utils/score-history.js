@@ -5,7 +5,7 @@
  * `.praxis/history.json` is appended once per scan with `{timestamp, score, grade,
  * totalFindings, totalDepVulns, categoryScores}`.
  *
- * The discipline here is about *not overstating* the data (P-IMP-055):
+ * The discipline here is about *not overstating* the data:
  *   - with no prior scans the project is at its **baseline** — the report must say so
  *     rather than draw an empty graph, which reads as "flat, no change"
  *   - a two-point series is **two measurements, not a trend**, and is labelled as such

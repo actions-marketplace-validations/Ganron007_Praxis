@@ -2,7 +2,7 @@
  * Portable rule registry — export Praxis rules in a form other tools can read.
  * ============================================================================
  *
- * Why this exists (P-IMP-059). Measured on 2026-10-02:
+ * Why this exists. Measured on 2026-10-02:
  *
  *   497 pattern rules total — 372 in agent rule tables + 125 in patterns.js
  *   100% of them are plain {rule, title, regex, severity, cwe, owasp, …} records

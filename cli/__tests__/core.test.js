@@ -192,7 +192,7 @@ describe('cli/core/output/sarif', async () => {
     assert.equal(parsed.runs[0].tool.driver.rules.length, 2);
   });
 
-  // ── GitHub `security-severity` (P-IMP-058) ─────────────────────────────────
+  // ── GitHub `security-severity` ─────────────────────────────────
   // `level` alone collapsed critical and high into the same bucket, so every Code
   // Scanning consumer saw compressed severity. `security-severity` is the numeric
   // property GitHub ranks and filters on.
@@ -280,7 +280,7 @@ describe('cli/core/output/sarif', async () => {
 });
 
 // =============================================================================
-// P-IMP-062 / P-IMP-063 — one SARIF serializer, reachable from every command
+// One SARIF serializer, reachable from every command
 // =============================================================================
 //
 // Four commands carried private SARIF serializers. The `security-severity` fix
@@ -572,7 +572,7 @@ describe('architecture diagram', async () => {
 });
 
 // =============================================================================
-// P-IMP-065 — one source for the tool version
+// One source for the tool version
 // =============================================================================
 //
 // Seven modules read `package.json` for the version independently, and one more

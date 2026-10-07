@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { BenchmarkRunner } from './benchmark/runner.js';
 import { GROUND_TRUTH_FIXTURES } from './benchmark/fixtures.js';
 
-describe('Praxis Accuracy & Benchmark Suite (P-IMP-040)', () => {
+describe('Praxis Accuracy & Benchmark Suite', () => {
   it('executes ground-truth benchmark fixtures and meets precision targets', () => {
     const report = BenchmarkRunner.run(GROUND_TRUTH_FIXTURES);
     const { metrics } = report;

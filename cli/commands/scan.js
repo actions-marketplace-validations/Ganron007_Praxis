@@ -541,7 +541,7 @@ function outputJSON(results, filesScanned) {
 /**
  * SARIF output for GitHub Code Scanning.
  *
- * Delegates to the shared serializer in `cli/core/output/sarif.js` (P-IMP-062); this used
+ * Delegates to the shared serializer in `cli/core/output/sarif.js`; this used
  * to be a private copy. That copy also disagreed with itself — it gave a `low` finding
  * rule-level `note` but result-level `warning` — and hardcoded the SARIF spec version
  * `2.1.0` as the tool driver version.

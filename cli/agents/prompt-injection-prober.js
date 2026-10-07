@@ -70,7 +70,7 @@ function loadCorpus() {
     //
     // The seed used to be consulted only via `praxis intel update`. Loading it here
     // means the shipped attack-vector families work on a first run with no network,
-    // and it makes the release's own signatures authoritative (P-IMP-064).
+    // and it makes the release's own signatures authoritative.
     const seed = readJson(THREATPACK_SEED);
     const seedVersion = seed?.version || null;
     for (const p of seed?.probes || []) probes.push(decorate(p));

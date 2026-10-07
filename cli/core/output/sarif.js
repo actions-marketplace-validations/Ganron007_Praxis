@@ -1,7 +1,7 @@
 /**
  * SARIF v2.1.0 output formatter.
  *
- * The single SARIF serializer for Praxis (P-IMP-062). Every emitting path must go
+ * The single SARIF serializer for Praxis. Every emitting path must go
  * through here: `scan --sarif`, `scan ci --sarif`, `audit --sarif`, `redteam --sarif`,
  * `scan standard --sarif` and `--format sarif`. Four commands used to carry private
  * copies of this logic, which meant fixes applied here reached almost nobody — most
@@ -84,7 +84,7 @@ function renderSARIFDocument(report, options = {}) {
     toolName = 'praxis',
     // Defaults to the real package version. This used to fall back to a hardcoded
     // '1.0.0', so any caller that forgot to pass `toolVersion` reported a confidently
-    // wrong driver version in Code Scanning (P-IMP-065).
+    // wrong driver version in Code Scanning.
     toolVersion = report.version || toolVersion_(),
     informationUri = 'https://github.com/Ganron007/Praxis',
     rootPath = null,

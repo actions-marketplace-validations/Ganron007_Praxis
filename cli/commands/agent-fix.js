@@ -644,7 +644,7 @@ function severityLabel(sev) {
 // =============================================================================
 
 // =============================================================================
-// VERIFY — tiered ladder (P-IMP-032)
+// VERIFY — tiered ladder
 // =============================================================================
 // Executable oracles only; no tier is decided by model judgment:
 //   Tier 1  build/lint   — the project's own build (or lint) must still pass
@@ -741,7 +741,7 @@ export async function verifyFile(root, filePath, originalFindings, options = {})
   const tiers = [];
 
   try {
-    // Tier 0 — AST syntax verification (P-IMP-010)
+    // Tier 0 — AST syntax verification
     const ext = path.extname(filePath).toLowerCase();
     if (['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs', '.py'].includes(ext)) {
       try {

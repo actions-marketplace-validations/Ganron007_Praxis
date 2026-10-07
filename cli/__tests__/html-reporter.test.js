@@ -1,7 +1,7 @@
 /**
  * Tests for cli/agents/html-reporter.js — the user-facing HTML report generator.
  *
- * The reporter had no test coverage at all before P-IMP-051, despite being ~600 lines
+ * The reporter had no test coverage at all before this work, despite being ~600 lines
  * of string-building that ends up in front of users. These tests focus on the parts
  * that can silently produce a wrong or unsafe report:
  *   - HTML escaping (untrusted finding text flows into the document)
@@ -164,7 +164,7 @@ describe('HTMLReporter — severity distribution', () => {
 });
 
 // =============================================================================
-// Agent coverage (P-IMP-051)
+// Agent coverage
 // =============================================================================
 
 describe('HTMLReporter — agent coverage', () => {
@@ -300,7 +300,7 @@ describe('HTMLReporter — full document', () => {
     assert.ok(without.includes('not captured'));
   });
 
-  // P-IMP-056: tab navigation must not rely on inline javascript: URLs.
+  // Tab navigation must not rely on inline javascript: URLs.
   it('uses no javascript: URLs and switches tabs via a delegated handler', () => {
     const html = reporter.generate(SCORE_RESULT, FINDINGS, {}, '/proj', AGENT_RESULTS);
     assert.ok(!html.includes('javascript:'), 'inline javascript: URLs break a strict CSP');
@@ -362,7 +362,7 @@ describe('HTMLReporter — full document', () => {
 });
 
 // =============================================================================
-// Shared theme (P-IMP-051c) — single source of truth for every HTML surface
+// Shared theme — single source of truth for every HTML surface
 // =============================================================================
 
 describe('html-theme — shared primitives', async () => {
@@ -431,7 +431,7 @@ describe('html-theme — shared primitives', async () => {
 // =============================================================================
 // De-duplication guard
 // =============================================================================
-// The point of P-IMP-051c is that the severity palette and escaping live in ONE
+// Splitting the theme out is what puts the severity palette and escaping in ONE
 // place. These are deliberately *behavioural* rather than source-scanning: they
 // assert both reports emit the theme's canonical rules, so an intentional
 // re-theme (which changes the theme) keeps passing, while a report that

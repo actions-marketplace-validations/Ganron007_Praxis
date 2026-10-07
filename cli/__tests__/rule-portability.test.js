@@ -1,5 +1,5 @@
 /**
- * Tests for the portable rule export/import round-trip (P-IMP-059 / P-IMP-060).
+ * Tests for the portable rule export/import round-trip.
  *
  * The load-bearing properties here are honesty properties, not just "it runs":
  *   - every exported pattern is validated before it ships, and the export REFUSES to

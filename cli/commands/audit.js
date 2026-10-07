@@ -922,7 +922,7 @@ function outputJSON(scoreResult, findings, depVulns, recon, agentResults, remedi
     remediationPlan,
     recon,
     agents: agentResults,
-    // Provenance: which tool, runtime and vendored data produced these numbers (P-IMP-053).
+    // Provenance: which tool, runtime and vendored data produced these numbers.
     fingerprint: buildScanFingerprint({ filesScanned }),
   };
   if (scoreResult.compliance) output.compliance = scoreResult.compliance;
@@ -959,7 +959,7 @@ function outputJSON(scoreResult, findings, depVulns, recon, agentResults, remedi
 /**
  * SARIF for GitHub Code Scanning.
  *
- * Delegates to the shared serializer in `cli/core/output/sarif.js` (P-IMP-062). This was
+ * Delegates to the shared serializer in `cli/core/output/sarif.js`. This was
  * a private copy, hardcoding a driver version of `4.0.0` while the package was at a
  * different number entirely, and it carried no `security-severity` — so the default
  * `praxis scan` lost severity fidelity in Code Scanning.

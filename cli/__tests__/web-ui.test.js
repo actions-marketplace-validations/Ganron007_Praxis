@@ -1,5 +1,5 @@
 /**
- * Tests for the web UI (P-IMP-052).
+ * Tests for the web UI.
  *
  * The web UI is the one place where Praxis adds an *attack surface* rather than a
  * feature: it holds source code in memory and, via `praxis fix`, could write code.

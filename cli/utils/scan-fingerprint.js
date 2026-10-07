@@ -2,7 +2,7 @@
  * Scan fingerprint — identify exactly what produced a set of findings.
  * ============================================================================
  *
- * Why this exists (P-IMP-053): during self-dogfooding a scan reported 325 findings
+ * Why this exists: during self-dogfooding a scan reported 325 findings
  * where four subsequent scans of the identical tree reported 308. The extra 17 were
  * `PROBE_*` / `VIBE_*` rules in files nobody had touched. Data drift, test fixtures
  * and the scan cache were each ruled out, so the cause stayed unknown.

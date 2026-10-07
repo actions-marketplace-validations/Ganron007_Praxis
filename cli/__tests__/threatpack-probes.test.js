@@ -1,5 +1,5 @@
 /**
- * Threat-pack probe precision (P-IMP-057).
+ * Threat-pack probe precision.
  *
  * A shipped threat-pack probe fired a *medium-severity* "document-payload split
  * injection" finding on the phrase "when combined with" — idiomatic English that
@@ -77,7 +77,7 @@ describe('TP-003 — split-payload precision', () => {
   });
 
   it('does NOT fire on ordinary English', () => {
-    // The regression that motivated P-IMP-057: this exact comment in
+    // The regression this guards: this exact comment in
     // cli/commands/audit.js was reported as a medium-severity finding.
     const benign = [
       '// Keep stdout pure JSON/SARIF when combined with machine output',
@@ -94,7 +94,7 @@ describe('TP-003 — split-payload precision', () => {
   it('the tightened pattern is what actually ships, not just what the pack file says', () => {
     // The pack file was fixed, but the *loaded* corpus is what the agent scans with. A
     // stale `~/.praxis/threat-intel.json` was reinstating the pre-fix pattern through
-    // the feed overlay, so the benign text was flagged again in a real scan (P-IMP-064).
+    // the feed overlay, so the benign text was flagged again in a real scan.
     const benign = 'Keep stdout pure JSON/SARIF when combined with machine output';
     const loaded = _internals.loadCorpus();
     const tp3 = loaded.probes.find(p => p.id === 'TP-003');
@@ -106,7 +106,7 @@ describe('TP-003 — split-payload precision', () => {
 });
 
 // =============================================================================
-// Feed overlay versioning (P-IMP-064)
+// Feed overlay versioning
 // =============================================================================
 //
 // `loadCorpus` overlays probes from the fetched intel feed on top of the bundled

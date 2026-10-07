@@ -55,7 +55,7 @@ export class HTMLReporter {
 
   /**
    * The provenance line printed in report footers: exactly which tool, runtime and
-   * vendored data assets produced this document (P-IMP-053). A surprising result should
+   * vendored data assets produced this document. A surprising result should
    * be attributable, not mysterious.
    */
   getFingerprintLine(filesScanned = null) {
@@ -880,7 +880,7 @@ function toggleDetail(id) {
   /**
    * Score trend over time, from `.praxis/history.json`.
    *
-   * This is the part that must not overstate (P-IMP-055). An empty graph reads as
+   * This is the part that must not overstate. An empty graph reads as
    * "flat, no change", which is a different claim from "we have no data", so:
    *   - no prior scans  → say the project is at its baseline
    *   - fewer than 3 measurements → say a trend needs more, and show what exists
@@ -985,7 +985,7 @@ function toggleDetail(id) {
   }
 
   /**
-   * Remediation Ledger — the applied half of the find→fix→verify loop (P-IMP-054).
+   * Remediation Ledger — the applied half of the find→fix→verify loop.
    *
    * Reads `.praxis/fixes.jsonl` (currently applied changes) and `.praxis/failures.jsonl`
    * (plans proposed and rejected). Rejections are the more telling half: a rejected fix
